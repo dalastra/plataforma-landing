@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Business } from '@/types';
 import {
   X,
@@ -45,6 +46,12 @@ export default function BusinessDetailModal({
   onClose,
   onGenerateLandingPage,
 }: BusinessDetailModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!business) return;
     const originalOverflow = document.body.style.overflow;
@@ -54,12 +61,12 @@ export default function BusinessDetailModal({
     };
   }, [business]);
 
-  if (!business) return null;
+  if (!business || !mounted) return null;
 
   const isHigh = business.opportunityScore === 'high';
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
       <div
         className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl p-6 text-zinc-100"
         onClick={(e) => e.stopPropagation()}
@@ -274,6 +281,7 @@ export default function BusinessDetailModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -46,12 +46,12 @@ export default function MapComponent({
           zoomControl: true,
         });
 
-        // High-end Dark CartoDB basemap for Linear/SaaS aesthetic
+        // OpenStreetMap clean basemap without API key watermarks
         L.tileLayer(
-          'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
           {
             attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19,
           }
         ).addTo(map);

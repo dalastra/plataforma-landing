@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { LandingPageProject, Business, CommercialPitch } from '@/types';
 import { generateCommercialPitches } from '@/lib/pitch';
 import { renderStandaloneHtml } from '@/lib/generator';
@@ -29,22 +30,44 @@ interface LandingPageEditorModalProps {
   onUpdateProject: (updated: LandingPageProject) => void;
 }
 
-export default function LandingPageEditorModal({
+export default function LandingPageEditorModal(props: LandingPageEditorModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!props.project || !mounted) return null;
+
+  return createPortal(
+    <LandingPageEditorInner
+      project={props.project}
+      business={props.business}
+      onClose={props.onClose}
+      onUpdateProject={props.onUpdateProject}
+    />,
+    document.body
+  );
+}
+
+function LandingPageEditorInner({
   project,
   business,
   onClose,
   onUpdateProject,
-}: LandingPageEditorModalProps) {
+}: {
+  project: LandingPageProject;
+  business: Business;
+  onClose: () => void;
+  onUpdateProject: (updated: LandingPageProject) => void;
+}) {
   useEffect(() => {
-    if (!project) return;
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = originalOverflow;
     };
-  }, [project]);
-
-  if (!project) return null;
+  }, []);
 
   const [activeTab, setActiveTab] = useState<'preview' | 'edit' | 'pitch'>('preview');
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
@@ -148,7 +171,7 @@ export default function LandingPageEditorModal({
     : null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 md:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-2 md:p-4 bg-black/85 backdrop-blur-md">
       <div
         className="relative w-full max-w-7xl h-[95vh] flex flex-col bg-[#0e0e11] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden text-zinc-100"
         onClick={(e) => e.stopPropagation()}

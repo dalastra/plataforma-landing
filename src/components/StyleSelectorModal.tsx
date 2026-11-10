@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Business, LandingPageStyle, StylePresetId } from '@/types';
 import { STYLE_PRESETS, BUSINESS_CATEGORIES } from '@/lib/constants';
 import {
@@ -29,6 +30,12 @@ export default function StyleSelectorModal({
   onConfirmGenerate,
   isGenerating = false,
 }: StyleSelectorModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!business) return;
     const originalOverflow = document.body.style.overflow;
@@ -57,10 +64,10 @@ export default function StyleSelectorModal({
     setCustomStyle(STYLE_PRESETS[recommended]);
   }
 
-  if (!business) return null;
+  if (!business || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
       <div
         className="relative w-full max-w-3xl max-h-[92vh] overflow-y-auto bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl p-6 text-zinc-100"
         onClick={(e) => e.stopPropagation()}
@@ -382,6 +389,7 @@ export default function StyleSelectorModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

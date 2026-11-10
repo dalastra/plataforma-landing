@@ -194,7 +194,7 @@ export default function DescobertaPage() {
   });
 
   return (
-    <div className="p-4 md:p-6 max-w-[1600px] mx-auto w-full space-y-5 animate-in fade-in duration-300">
+    <div className="p-4 md:p-6 max-w-[1600px] mx-auto w-full space-y-5">
       {/* Search Bar & Geolocation Controls */}
       <div className="p-4 rounded-2xl bg-[#121215] border border-zinc-800 shadow-xl space-y-4">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
@@ -289,9 +289,13 @@ export default function DescobertaPage() {
       {/* Main Split Layout: Map on Top/Left, Results on Bottom/Right */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-250px)] min-h-[600px]">
         {/* Left: Interactive Map */}
-        <div className={`lg:col-span-7 flex flex-col h-full rounded-2xl overflow-hidden bg-[#121215] border border-zinc-800 shadow-xl relative isolate z-0 ${
-          (selectedBusiness || styleModalBusiness || activeProject) ? 'pointer-events-none select-none' : ''
-        }`}>
+        <div
+          className={`lg:col-span-7 flex flex-col h-full rounded-2xl overflow-hidden bg-[#121215] border border-zinc-800 shadow-xl relative isolate z-0 transition-all duration-300 ${
+            selectedBusiness || styleModalBusiness || activeProject
+              ? 'opacity-0 invisible pointer-events-none select-none scale-95'
+              : 'opacity-100 visible pointer-events-auto scale-100'
+          }`}
+        >
           <div className="flex items-center justify-between px-4 py-2.5 bg-[#0c0c0e] border-b border-zinc-800">
             <div className="flex items-center gap-2 text-xs text-zinc-300 font-medium">
               <MapPin className="w-3.5 h-3.5 text-blue-400" />
