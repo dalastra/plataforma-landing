@@ -51,6 +51,8 @@ export default function LandingPageEditorModal({
   const [pitchVariant, setPitchVariant] = useState<'whatsapp' | 'instagram' | 'direct' | 'formal' | 'casual'>('whatsapp');
   const [copiedPitch, setCopiedPitch] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [deployingVercel, setDeployingVercel] = useState(false);
+  const [vercelDeployError, setVercelDeployError] = useState<string | null>(null);
 
   // Local state for live editable content
   const [content, setContent] = useState(project.content);
@@ -90,6 +92,40 @@ export default function LandingPageEditorModal({
     } else {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+    }
+  }
+
+  async function handleDeployToVercel() {
+    if (!project) return;
+    try {
+      setDeployingVercel(true);
+      setVercelDeployError(null);
+
+      const res = await fetch('/api/vercel/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          htmlContent: currentHtml,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.url) {
+        const updated: LandingPageProject = {
+          ...project,
+          vercelUrl: data.url,
+          status: 'ready',
+          updatedAt: new Date().toISOString(),
+        };
+        onUpdateProject(updated);
+      } else {
+        setVercelDeployError(data.error || 'Falha ao publicar na Vercel.');
+      }
+    } catch (err: any) {
+      setVercelDeployError(err.message || 'Erro ao conectar à API de deploy.');
+    } finally {
+      setDeployingVercel(false);
     }
   }
 
@@ -177,6 +213,39 @@ export default function LandingPageEditorModal({
 
           {/* Top Right Quick Actions */}
           <div className="flex items-center gap-2">
+            {project.vercelUrl ? (
+              <a
+                href={project.vercelUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-semibold transition-colors"
+                title="Abrir página publicada na Vercel"
+              >
+                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 1155 1000">
+                  <path d="m577.3 0 577.4 1000H0z" />
+                </svg>
+                <span>No ar na Vercel</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={handleDeployToVercel}
+                disabled={deployingVercel}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-bold transition-all shadow-sm disabled:opacity-50"
+                title="Publicar na sua conta da Vercel"
+              >
+                {deployingVercel ? (
+                  <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 1155 1000">
+                    <path d="m577.3 0 577.4 1000H0z" />
+                  </svg>
+                )}
+                <span>{deployingVercel ? 'Publicando...' : 'Publicar na Vercel'}</span>
+              </button>
+            )}
+
             <button
               onClick={() => handleCopy(previewUrl)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-medium transition-colors"
@@ -215,6 +284,22 @@ export default function LandingPageEditorModal({
             </button>
           </div>
         </div>
+
+        {vercelDeployError && (
+          <div className="px-5 py-2.5 bg-rose-950/40 border-b border-rose-800/40 text-rose-300 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="font-bold">Aviso Vercel:</span>
+              <span>{vercelDeployError}</span>
+            </div>
+            <a
+              href="/configuracoes"
+              target="_blank"
+              className="underline hover:text-white font-medium ml-2"
+            >
+              Configurar Minha Vercel
+            </a>
+          </div>
+        )}
 
         {/* Modal Main Body */}
         <div className="flex-1 flex overflow-hidden">

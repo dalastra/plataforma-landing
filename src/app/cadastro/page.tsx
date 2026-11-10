@@ -293,6 +293,27 @@ export default function CadastroPage() {
                   </>
                 )}
               </button>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-zinc-800" />
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase">
+                  <span className="bg-[#121215] px-2 text-zinc-500 font-semibold tracking-wider">
+                    Ou
+                  </span>
+                </div>
+              </div>
+
+              <Link
+                href="/login?vercel=true"
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl bg-black hover:bg-zinc-900 text-white font-semibold text-xs border border-zinc-800 hover:border-zinc-700 transition-all shadow-sm"
+              >
+                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 1155 1000">
+                  <path d="m577.3 0 577.4 1000H0z" />
+                </svg>
+                <span>Cadastrar com sua Conta Vercel</span>
+              </Link>
             </form>
           )}
 

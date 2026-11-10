@@ -66,6 +66,7 @@ function mapProjectRow(row: any): LandingPageProject {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     status: row.status as any,
+    vercelUrl: row.vercel_url || undefined,
   };
 }
 
@@ -253,6 +254,7 @@ export async function saveUserProject(
     style_config: project.style,
     content: project.content,
     html_content: project.htmlContent || null,
+    vercel_url: project.vercelUrl || null,
     demo_url: `/preview/${project.id}`,
     status: project.status || 'ready',
     updated_at: new Date().toISOString(),
@@ -266,6 +268,42 @@ export async function saveUserProject(
 
   if (error) {
     console.error('Error saving project in Supabase:', error);
+    return null;
+  }
+
+  return mapProjectRow(data);
+}
+
+export async function updateProject(
+  projectId: string,
+  updates: Partial<LandingPageProject>
+): Promise<LandingPageProject | null> {
+  const supabase = await createClient();
+
+  const updateFields: any = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updates.businessName) updateFields.project_name = updates.businessName;
+  if (updates.category) updateFields.category = updates.category;
+  if (updates.style) {
+    updateFields.style_config = updates.style;
+    updateFields.style_id = updates.style.id;
+  }
+  if (updates.content) updateFields.content = updates.content;
+  if (updates.htmlContent !== undefined) updateFields.html_content = updates.htmlContent;
+  if (updates.status) updateFields.status = updates.status;
+  if (updates.vercelUrl !== undefined) updateFields.vercel_url = updates.vercelUrl;
+
+  const { data, error } = await supabase
+    .from('landing_pages')
+    .update(updateFields)
+    .eq('id', projectId)
+    .select('*')
+    .single();
+
+  if (error || !data) {
+    console.error('Error updating project:', error);
     return null;
   }
 
@@ -296,6 +334,8 @@ export async function getUserSettings(userId: string): Promise<AppSettings> {
     mapProvider: 'osm',
     userCity: 'São Paulo, SP',
     defaultRadiusKm: 5,
+    vercelAccessToken: '',
+    vercelTeamId: '',
   };
 
   const { data, error } = await supabase
@@ -315,6 +355,12 @@ export async function getUserSettings(userId: string): Promise<AppSettings> {
     mapProvider: (data.map_provider as any) || 'osm',
     userCity: data.user_city || defaultSettings.userCity,
     defaultRadiusKm: data.default_radius_km || defaultSettings.defaultRadiusKm,
+    vercelAccessToken: data.vercel_access_token || '',
+    vercelTeamId: data.vercel_team_id || '',
+    vercelUser:
+      data.vercel_user_info && Object.keys(data.vercel_user_info).length > 0
+        ? data.vercel_user_info
+        : undefined,
   };
 }
 
@@ -324,15 +370,19 @@ export async function saveUserSettings(
 ): Promise<AppSettings> {
   const supabase = await createClient();
 
-  const row = {
+  const row: any = {
     user_id: userId,
-    gemini_api_key: settings.geminiApiKey || '',
-    google_places_api_key: settings.googlePlacesApiKey || '',
-    map_provider: settings.mapProvider || 'osm',
-    user_city: settings.userCity || 'São Paulo, SP',
-    default_radius_km: settings.defaultRadiusKm || 5,
     updated_at: new Date().toISOString(),
   };
+
+  if (settings.geminiApiKey !== undefined) row.gemini_api_key = settings.geminiApiKey;
+  if (settings.googlePlacesApiKey !== undefined) row.google_places_api_key = settings.googlePlacesApiKey;
+  if (settings.mapProvider !== undefined) row.map_provider = settings.mapProvider;
+  if (settings.userCity !== undefined) row.user_city = settings.userCity;
+  if (settings.defaultRadiusKm !== undefined) row.default_radius_km = settings.defaultRadiusKm;
+  if (settings.vercelAccessToken !== undefined) row.vercel_access_token = settings.vercelAccessToken;
+  if (settings.vercelTeamId !== undefined) row.vercel_team_id = settings.vercelTeamId;
+  if (settings.vercelUser !== undefined) row.vercel_user_info = settings.vercelUser;
 
   await supabase.from('user_settings').upsert(row, { onConflict: 'user_id' });
 

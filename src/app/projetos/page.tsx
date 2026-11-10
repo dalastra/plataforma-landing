@@ -192,10 +192,23 @@ export default function ProjetosPage() {
                     <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
                       {proj.category}
                     </span>
-                    <span className="text-[11px] text-zinc-500 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {new Date(proj.createdAt).toLocaleDateString('pt-BR')}
-                    </span>
+                    {proj.vercelUrl ? (
+                      <a
+                        href={proj.vercelUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 hover:underline"
+                        title="Abrir no ar na Vercel"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Vercel Live</span>
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-zinc-500 flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(proj.createdAt).toLocaleDateString('pt-BR')}
+                      </span>
+                    )}
                   </div>
 
                   {/* Title & Tagline */}

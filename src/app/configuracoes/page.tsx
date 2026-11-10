@@ -32,6 +32,10 @@ export default function ConfiguracoesPage() {
   const [testingGemini, setTestingGemini] = useState(false);
   const [geminiStatus, setGeminiStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  // Vercel Individual Account Connection
+  const [testingVercel, setTestingVercel] = useState(false);
+  const [vercelStatus, setVercelStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+
   useEffect(() => {
     loadSettings();
   }, []);
@@ -104,6 +108,61 @@ export default function ConfiguracoesPage() {
     } finally {
       setTestingGemini(false);
     }
+  }
+
+  async function handleTestVercel() {
+    if (!settings.vercelAccessToken || settings.vercelAccessToken.trim().length < 8) {
+      setVercelStatus({ ok: false, msg: 'Insira seu Token de Acesso da Vercel antes de conectar.' });
+      return;
+    }
+
+    try {
+      setTestingVercel(true);
+      setVercelStatus(null);
+
+      const res = await fetch('/api/vercel/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: settings.vercelAccessToken }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.user) {
+        const updated = {
+          ...settings,
+          vercelUser: data.user,
+        };
+        setSettings(updated);
+        setVercelStatus({ ok: true, msg: data.message });
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        });
+      } else {
+        setVercelStatus({ ok: false, msg: data.error || 'Falha ao validar conta da Vercel.' });
+      }
+    } catch (err: any) {
+      setVercelStatus({ ok: false, msg: `Falha na requisição: ${err.message}` });
+    } finally {
+      setTestingVercel(false);
+    }
+  }
+
+  function handleDisconnectVercel() {
+    const updated = {
+      ...settings,
+      vercelAccessToken: '',
+      vercelTeamId: '',
+      vercelUser: undefined,
+    };
+    setSettings(updated);
+    setVercelStatus(null);
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
   }
 
   return (
@@ -189,6 +248,132 @@ export default function ConfiguracoesPage() {
 
           <div className="text-[11px] text-zinc-500 leading-relaxed bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/80">
             💡 <strong>Dica importante:</strong> Se você não informar uma chave da Gemini API, a plataforma utilizará automaticamente o <strong>Motor Semântico Local Integrado</strong>, gerando landing pages completas e responsivas sem nenhuma dependência externa!
+          </div>
+        </div>
+
+        {/* Vercel Multi-tenant Individual Account Integration */}
+        <div className="p-6 rounded-2xl bg-[#121215] border border-zinc-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 rounded-xl bg-black border border-zinc-700 text-white flex items-center justify-center">
+                <svg className="w-5 h-5 fill-current" viewBox="0 0 1155 1000">
+                  <path d="m577.3 0 577.4 1000H0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-white">Sua Conta Vercel (Hospedagem Individual)</h3>
+                <p className="text-xs text-zinc-400">
+                  Cada usuário conecta sua própria conta Vercel para publicar landing pages em seus próprios domínios.
+                </p>
+              </div>
+            </div>
+
+            <a
+              href="https://vercel.com/account/tokens"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+            >
+              <span>Gerar Token Vercel</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+
+          {/* If already connected, show active profile banner */}
+          {settings.vercelUser ? (
+            <div className="p-4 rounded-xl bg-gradient-to-r from-zinc-900 to-zinc-950 border border-emerald-500/30 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center font-bold text-white overflow-hidden">
+                  {settings.vercelUser.avatar ? (
+                    <img src={settings.vercelUser.avatar} alt="Vercel Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{settings.vercelUser.username?.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-white">{settings.vercelUser.name || settings.vercelUser.username}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
+                      Conta Conectada
+                    </span>
+                  </div>
+                  <div className="text-xs text-zinc-400">
+                    @{settings.vercelUser.username} • {settings.vercelUser.email}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDisconnectVercel}
+                className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-rose-950/40 text-zinc-400 hover:text-rose-400 border border-zinc-700 hover:border-rose-800/50 text-xs font-medium transition-colors"
+              >
+                Desconectar
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                  Token de Acesso Pessoal da Vercel (Personal Access Token)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    value={settings.vercelAccessToken || ''}
+                    onChange={(e) => setSettings({ ...settings, vercelAccessToken: e.target.value })}
+                    placeholder="Cole seu token da Vercel (ex: vercel_tok_...)"
+                    className="flex-1 px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestVercel}
+                    disabled={testingVercel}
+                    className="px-4 py-2.5 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-bold transition-all shrink-0 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {testingVercel ? (
+                      <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 1155 1000">
+                        <path d="m577.3 0 577.4 1000H0z" />
+                      </svg>
+                    )}
+                    <span>{testingVercel ? 'Conectando...' : 'Conectar Minha Conta'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-400 mb-1">
+                  Team ID da Vercel (Opcional - preencha apenas se publicar em time)
+                </label>
+                <input
+                  type="text"
+                  value={settings.vercelTeamId || ''}
+                  onChange={(e) => setSettings({ ...settings, vercelTeamId: e.target.value })}
+                  placeholder="team_..."
+                  className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Vercel Status Message */}
+          {vercelStatus && (
+            <div
+              className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                vercelStatus.ok
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+              }`}
+            >
+              {vercelStatus.ok ? <Check className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+              <span>{vercelStatus.msg}</span>
+            </div>
+          )}
+
+          <div className="text-[11px] text-zinc-400 leading-relaxed bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/80">
+            🔒 <strong>Isolamento Multi-tenant:</strong> Suas credenciais da Vercel são estritamente individuais e armazenadas com isolamento Row Level Security (RLS). Nenhuma outra conta do sistema terá acesso ou publicará na sua conta da Vercel.
           </div>
         </div>
 

@@ -156,6 +156,7 @@ export interface LandingPageProject {
   createdAt: string;
   updatedAt: string;
   status: 'draft' | 'ready' | 'shared';
+  vercelUrl?: string;
 }
 
 export type LeadStatus =
@@ -197,4 +198,13 @@ export interface AppSettings {
   mapProvider: 'osm' | 'google';
   userCity: string;
   defaultRadiusKm: number;
+  vercelAccessToken?: string;
+  vercelTeamId?: string;
+  vercelUser?: {
+    id: string;
+    username: string;
+    email: string;
+    name?: string;
+    avatar?: string;
+  };
 }

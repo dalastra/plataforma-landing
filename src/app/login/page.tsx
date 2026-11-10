@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Target, Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Sparkles, KeyRound } from 'lucide-react';
@@ -13,10 +13,53 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Vercel Direct Login State
+  const [showVercelModal, setShowVercelModal] = useState(false);
+  const [vercelToken, setVercelToken] = useState('');
+  const [vercelLoading, setVercelLoading] = useState(false);
+  const [vercelError, setVercelError] = useState<string | null>(null);
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || '/';
   const supabase = createClient();
+
+  useEffect(() => {
+    if (searchParams.get('vercel') === 'true') {
+      setShowVercelModal(true);
+    }
+  }, [searchParams]);
+
+  async function handleLoginWithVercel(e: React.FormEvent) {
+    e.preventDefault();
+    setVercelError(null);
+    if (!vercelToken.trim()) {
+      setVercelError('Por favor, informe seu token da Vercel.');
+      return;
+    }
+
+    try {
+      setVercelLoading(true);
+      const res = await fetch('/api/auth/vercel-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: vercelToken.trim() }),
+      });
+
+      const data = await res.json();
+      if (!data.success) {
+        setVercelError(data.error || 'Falha ao autenticar com a Vercel.');
+        return;
+      }
+
+      router.push(redirectTo);
+      router.refresh();
+    } catch (err: any) {
+      setVercelError(err.message || 'Erro inesperado ao conectar com a Vercel.');
+    } finally {
+      setVercelLoading(false);
+    }
+  }
 
   function handleFillDemo() {
     setEmail('demo@leadcraft.com');
@@ -186,6 +229,33 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* Divider */}
+          <div className="relative my-5">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-zinc-800" />
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase">
+              <span className="bg-[#121215] px-2 text-zinc-500 font-semibold tracking-wider">
+                Ou acesse com
+              </span>
+            </div>
+          </div>
+
+          {/* Vercel Individual Access Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setVercelError(null);
+              setShowVercelModal(true);
+            }}
+            className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl bg-black hover:bg-zinc-900 text-white font-semibold text-xs border border-zinc-800 hover:border-zinc-700 transition-all shadow-sm"
+          >
+            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 1155 1000">
+              <path d="m577.3 0 577.4 1000H0z" />
+            </svg>
+            <span>Entrar com sua Conta Vercel</span>
+          </button>
+
           {/* Create Account Link */}
           <div className="pt-5 mt-5 border-t border-zinc-800 text-center">
             <span className="text-xs text-zinc-400">Ainda não possui uma conta? </span>
@@ -198,6 +268,92 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* Vercel Login Modal */}
+      {showVercelModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-[#121215] border border-zinc-800 rounded-2xl p-6 shadow-2xl text-zinc-100">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-black border border-zinc-700 text-white flex items-center justify-center">
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 1155 1000">
+                    <path d="m577.3 0 577.4 1000H0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">Login com sua Conta Vercel</h3>
+                  <p className="text-[11px] text-zinc-400">Autenticação individual e isolada</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVercelModal(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-300 mb-4 leading-relaxed">
+              Cole o seu <strong>Personal Access Token</strong> da Vercel. O LeadCraft AI conectará a sua conta individual para que suas landing pages fiquem publicadas exclusivamente no seu perfil Vercel.
+            </p>
+
+            {vercelError && (
+              <div className="p-3 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
+                {vercelError}
+              </div>
+            )}
+
+            <form onSubmit={handleLoginWithVercel} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                  Token de Acesso Vercel
+                </label>
+                <input
+                  type="password"
+                  value={vercelToken}
+                  onChange={(e) => setVercelToken(e.target.value)}
+                  placeholder="Cole seu token (ex: vercel_tok_...)"
+                  autoFocus
+                  required
+                  className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500 font-mono"
+                />
+                <div className="flex justify-end mt-1.5">
+                  <a
+                    href="https://vercel.com/account/tokens"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-zinc-400 hover:text-white underline"
+                  >
+                    Onde encontro meu token na Vercel?
+                  </a>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowVercelModal(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={vercelLoading}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {vercelLoading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  ) : (
+                    <span>Entrar com Vercel</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
