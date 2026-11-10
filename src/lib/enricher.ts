@@ -85,12 +85,53 @@ export function detectWebsiteStatus(rawWebsite?: string, instagram?: string, fac
   return { status: 'unconfirmed', url: rawWebsite };
 }
 
+export function detectPhoneType(phone?: string): 'mobile_whatsapp' | 'landline' | 'unknown' {
+  if (!phone) return 'unknown';
+  const digits = phone.replace(/\D/g, '');
+  let localNum = digits;
+  if (localNum.startsWith('55') && (localNum.length === 12 || localNum.length === 13)) {
+    localNum = localNum.slice(2);
+  }
+  if (localNum.length === 11) {
+    const thirdDigit = localNum.charAt(2);
+    if (thirdDigit === '9') return 'mobile_whatsapp';
+  }
+  if (localNum.length === 10) {
+    const thirdDigit = localNum.charAt(2);
+    if (['2', '3', '4', '5'].includes(thirdDigit)) return 'landline';
+    if (['9', '8', '7'].includes(thirdDigit)) return 'mobile_whatsapp';
+  }
+  return 'unknown';
+}
+
+export async function lookupBrasilApiCnpj(cnpj: string) {
+  try {
+    const cleanCnpj = cnpj.replace(/\D/g, '');
+    if (cleanCnpj.length !== 14) return null;
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      cnpj: data.cnpj,
+      razaoSocial: data.razao_social,
+      nomeFantasia: data.nome_fantasia,
+      owners: (data.qsa || []).map((s: any) => s.nome_socio),
+      situacao: data.descricao_situacao_cadastral,
+      cnae: data.cnae_fiscal_descricao,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function analyzeOpportunity(input: RawPlaceInput): Business {
   const { status: websiteStatus, url: websiteUrl } = detectWebsiteStatus(
     input.rawWebsite,
     input.instagram,
     input.facebook
   );
+
+  const phoneType = detectPhoneType(input.whatsapp || input.phone);
 
   const hasPhone = Boolean(input.phone && input.phone.trim().length > 5);
   const hasWhatsapp = Boolean(input.whatsapp && input.whatsapp.trim().length > 5);
@@ -195,6 +236,7 @@ export function analyzeOpportunity(input: RawPlaceInput): Business {
     services,
     opportunityScore,
     opportunityReason,
+    phoneType,
     verifiedFields: {
       hasPhysicalLocation: Boolean(input.address && !input.address.includes('Não informado')),
       hasPhone: Boolean(hasPhone || hasWhatsapp),

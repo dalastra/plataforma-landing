@@ -46,6 +46,9 @@ function mapLeadRow(row: any): Lead {
     projectId: row.project_id || undefined,
     notes: row.notes || '',
     isFavorite: Boolean(row.is_favorite),
+    dealValue: row.deal_value ? Number(row.deal_value) : 0,
+    demoViewsCount: row.demo_views_count ? Number(row.demo_views_count) : 0,
+    lastDemoViewedAt: row.last_demo_viewed_at || undefined,
     firstContactAt: row.first_contact_at || undefined,
     lastContactDate: row.last_contact_at || undefined,
     createdAt: row.created_at,
@@ -67,6 +70,9 @@ function mapProjectRow(row: any): LandingPageProject {
     updatedAt: row.updated_at,
     status: row.status as any,
     vercelUrl: row.vercel_url || undefined,
+    demoViewsCount: row.demo_views_count ? Number(row.demo_views_count) : 0,
+    lastDemoViewedAt: row.last_demo_viewed_at || undefined,
+    customDomain: row.custom_domain || undefined,
   };
 }
 
@@ -142,6 +148,9 @@ export async function saveUserLead(userId: string, lead: Lead): Promise<Lead | n
     status: lead.status || 'new',
     notes: lead.notes || '',
     is_favorite: Boolean(lead.isFavorite),
+    deal_value: lead.dealValue || 0,
+    demo_views_count: lead.demoViewsCount || 0,
+    last_demo_viewed_at: lead.lastDemoViewedAt || null,
     last_contact_at: lead.lastContactDate || null,
     updated_at: new Date().toISOString(),
   };
@@ -171,6 +180,9 @@ export async function updateUserLead(
   if (updates.status !== undefined) patch.status = updates.status;
   if (updates.notes !== undefined) patch.notes = updates.notes;
   if (updates.isFavorite !== undefined) patch.is_favorite = updates.isFavorite;
+  if (updates.dealValue !== undefined) patch.deal_value = updates.dealValue;
+  if (updates.demoViewsCount !== undefined) patch.demo_views_count = updates.demoViewsCount;
+  if (updates.lastDemoViewedAt !== undefined) patch.last_demo_viewed_at = updates.lastDemoViewedAt;
   if (updates.lastContactDate !== undefined) patch.last_contact_at = updates.lastContactDate;
   if (updates.projectId !== undefined) patch.project_id = updates.projectId;
 
@@ -294,6 +306,9 @@ export async function updateProject(
   if (updates.htmlContent !== undefined) updateFields.html_content = updates.htmlContent;
   if (updates.status) updateFields.status = updates.status;
   if (updates.vercelUrl !== undefined) updateFields.vercel_url = updates.vercelUrl;
+  if (updates.demoViewsCount !== undefined) updateFields.demo_views_count = updates.demoViewsCount;
+  if (updates.lastDemoViewedAt !== undefined) updateFields.last_demo_viewed_at = updates.lastDemoViewedAt;
+  if (updates.customDomain !== undefined) updateFields.custom_domain = updates.customDomain;
 
   const { data, error } = await supabase
     .from('landing_pages')

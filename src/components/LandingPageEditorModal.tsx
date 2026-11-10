@@ -77,6 +77,15 @@ function LandingPageEditorInner({
   const [deployingVercel, setDeployingVercel] = useState(false);
   const [vercelDeployError, setVercelDeployError] = useState<string | null>(null);
 
+  // Custom Domain State
+  const [showDomainModal, setShowDomainModal] = useState(false);
+  const [domainInput, setDomainInput] = useState(project.customDomain || '');
+  const [domainLoading, setDomainLoading] = useState(false);
+  const [domainFeedback, setDomainFeedback] = useState<{ ok: boolean; msg: string; dns?: any } | null>(null);
+
+  // Visual Inline Edit Mode
+  const [inlineEditActive, setInlineEditActive] = useState(false);
+
   // Local state for live editable content
   const [content, setContent] = useState(project.content);
   const [style, setStyle] = useState(project.style);
@@ -149,6 +158,42 @@ function LandingPageEditorInner({
       setVercelDeployError(err.message || 'Erro ao conectar à API de deploy.');
     } finally {
       setDeployingVercel(false);
+    }
+  }
+
+  async function handleConnectDomain(e: React.FormEvent) {
+    e.preventDefault();
+    if (!domainInput.trim()) return;
+    try {
+      setDomainLoading(true);
+      setDomainFeedback(null);
+      const res = await fetch('/api/vercel/domains', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project.id,
+          domainName: domainInput.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDomainFeedback({
+          ok: true,
+          msg: data.message,
+          dns: data.dnsRecords,
+        });
+        const updated = {
+          ...project,
+          customDomain: data.domain,
+        };
+        onUpdateProject(updated);
+      } else {
+        setDomainFeedback({ ok: false, msg: data.error || 'Erro ao registrar domínio.' });
+      }
+    } catch (err: any) {
+      setDomainFeedback({ ok: false, msg: err.message || 'Erro de comunicação.' });
+    } finally {
+      setDomainLoading(false);
     }
   }
 
@@ -237,19 +282,31 @@ function LandingPageEditorInner({
           {/* Top Right Quick Actions */}
           <div className="flex items-center gap-2">
             {project.vercelUrl ? (
-              <a
-                href={project.vercelUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-semibold transition-colors"
-                title="Abrir página publicada na Vercel"
-              >
-                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 1155 1000">
-                  <path d="m577.3 0 577.4 1000H0z" />
-                </svg>
-                <span>No ar na Vercel</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+              <>
+                <a
+                  href={project.vercelUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 text-xs font-semibold transition-colors"
+                  title="Abrir página publicada na Vercel"
+                >
+                  <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 1155 1000">
+                    <path d="m577.3 0 577.4 1000H0z" />
+                  </svg>
+                  <span>No ar na Vercel</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => setShowDomainModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-semibold transition-colors"
+                  title="Vincular domínio próprio (ex: www.cliente.com.br)"
+                >
+                  <span>🌐</span>
+                  <span>{project.customDomain ? project.customDomain : 'Vincular Domínio'}</span>
+                </button>
+              </>
             ) : (
               <button
                 type="button"
@@ -360,8 +417,24 @@ function LandingPageEditorInner({
                   </button>
                 </div>
 
-                <div className="text-xs text-zinc-400">
-                  {viewMode === 'desktop' ? '100% Fluido' : 'Simulador iPhone / Android'}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setInlineEditActive(!inlineEditActive)}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      inlineEditActive
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                        : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    }`}
+                    title="Permite clicar diretamente em qualquer texto na página para editar"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>{inlineEditActive ? 'Modo Edição Ativo (clique no texto)' : 'Edição Visual Inline'}</span>
+                  </button>
+
+                  <div className="text-xs text-zinc-400 hidden lg:block">
+                    {viewMode === 'desktop' ? '100% Fluido' : 'Simulador iPhone / Android'}
+                  </div>
                 </div>
               </div>
 
@@ -374,7 +447,11 @@ function LandingPageEditorInner({
                 >
                   <iframe
                     title="Landing Page Preview"
-                    srcDoc={currentHtml}
+                    srcDoc={
+                      inlineEditActive
+                        ? currentHtml.replace('<body>', '<body contenteditable="true" style="outline: none;">')
+                        : currentHtml
+                    }
                     className="w-full h-full border-0"
                   />
                 </div>
@@ -652,6 +729,89 @@ function LandingPageEditorInner({
           )}
         </div>
       </div>
+
+      {/* Connect Custom Domain Modal */}
+      {showDomainModal && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+          <div className="relative w-full max-w-md bg-[#121215] border border-zinc-800 rounded-2xl p-6 shadow-2xl text-zinc-100">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-bold text-base text-white">Vincular Domínio Próprio</h3>
+                <p className="text-xs text-zinc-400">Publicação direta na conta Vercel</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDomainModal(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-300 mb-4 leading-relaxed">
+              Informe o domínio que o cliente comprou (ex: <code>www.barbeariasilva.com.br</code> ou <code>pizzariaroma.com.br</code>). O LeadCraft AI registrará o domínio no projeto Vercel para você.
+            </p>
+
+            <form onSubmit={handleConnectDomain} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
+                  Nome do Domínio
+                </label>
+                <input
+                  type="text"
+                  value={domainInput}
+                  onChange={(e) => setDomainInput(e.target.value)}
+                  placeholder="www.seusite.com.br"
+                  required
+                  className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              {domainFeedback && (
+                <div
+                  className={`p-3.5 rounded-xl border text-xs space-y-2 ${
+                    domainFeedback.ok
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                      : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                  }`}
+                >
+                  <div className="font-semibold">{domainFeedback.msg}</div>
+                  {domainFeedback.dns && (
+                    <div className="space-y-1.5 pt-2 border-t border-emerald-500/20 text-[11px] font-mono">
+                      <div className="text-zinc-400 font-sans font-medium">Configure no Registro.br / DNS:</div>
+                      <div className="p-2 rounded bg-black/40 border border-zinc-800">
+                        <div>Tipo A: @ → <strong>{domainFeedback.dns.typeA.value}</strong></div>
+                        <div>CNAME: www → <strong>{domainFeedback.dns.cname.value}</strong></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDomainModal(false)}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-800 transition-colors"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="submit"
+                  disabled={domainLoading}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/30 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {domainLoading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <span>Salvar & Vincular</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

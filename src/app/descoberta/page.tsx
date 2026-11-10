@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Layers,
+  Download,
 } from 'lucide-react';
 import { Business, LandingPageProject } from '@/types';
 import { BUSINESS_CATEGORIES } from '@/lib/constants';
@@ -186,6 +187,31 @@ export default function DescobertaPage() {
     }
   }
 
+  function handleExportDiscoveredCsv() {
+    if (filteredBusinesses.length === 0) return;
+    const headers = ['Nome', 'Categoria', 'Oportunidade', 'Telefone', 'WhatsApp', 'Tipo Telefone', 'Endereco', 'Possui Site?', 'Instagram', 'Avaliacao'];
+    const rows = filteredBusinesses.map((b) => [
+      `"${b.name.replace(/"/g, '""')}"`,
+      `"${b.category.replace(/"/g, '""')}"`,
+      `"${b.opportunityScore}"`,
+      `"${(b.phone || '').replace(/"/g, '""')}"`,
+      `"${(b.whatsapp || '').replace(/"/g, '""')}"`,
+      `"${b.phoneType || 'desconhecido'}"`,
+      `"${(b.address || '').replace(/"/g, '""')}"`,
+      `"${b.websiteStatus === 'own_website' ? 'Sim' : 'Nao'}"`,
+      `"${(b.instagram || '').replace(/"/g, '""')}"`,
+      `"${b.rating || ''}"`,
+    ]);
+    const csv = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `estabelecimentos-prospeccao-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // Filtered list
   const filteredBusinesses = businesses.filter((b) => {
     if (filterOpportunity !== 'todos' && b.opportunityScore !== filterOpportunity) return false;
@@ -252,6 +278,17 @@ export default function DescobertaPage() {
             )}
             <span>Buscar Negócios</span>
           </button>
+
+          {filteredBusinesses.length > 0 && (
+            <button
+              onClick={handleExportDiscoveredCsv}
+              className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-800 text-xs font-semibold transition-colors shrink-0"
+              title="Exportar estabelecimentos encontrados para Excel/CSV"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+              <span>Exportar CSV</span>
+            </button>
+          )}
         </div>
 
         {/* Category Pills Slider */}

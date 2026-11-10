@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getProjectById } from '@/lib/db';
+import PreviewContainer from '@/components/PreviewContainer';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,10 +16,5 @@ export default async function PreviewPage({
     notFound();
   }
 
-  return (
-    <div
-      dangerouslySetInnerHTML={{ __html: project.htmlContent }}
-      style={{ minHeight: '100vh', margin: 0, padding: 0 }}
-    />
-  );
+  return <PreviewContainer project={project} />;
 }

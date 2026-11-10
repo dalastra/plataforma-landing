@@ -148,25 +148,26 @@ export default function BusinessCard({
 
         {/* Verified Channels (Icons) */}
         <div className="flex items-center gap-2 mb-4">
-          {business.whatsapp ? (
+          {business.whatsapp || business.phoneType === 'mobile_whatsapp' ? (
             <a
-              href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`}
+              href={`https://wa.me/${(business.whatsapp || business.phone || '').replace(/\D/g, '')}`}
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
-              title="WhatsApp disponível"
+              className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 font-semibold transition-colors"
+              title="WhatsApp Celular verificado"
             >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <MessageSquare className="w-3 h-3" />
-              <span>WhatsApp</span>
+              <span>WhatsApp Celular</span>
             </a>
           ) : business.phone ? (
             <span className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700">
-              <Phone className="w-3 h-3" />
-              <span>{business.phone}</span>
+              <Phone className="w-3 h-3 text-zinc-400" />
+              <span>{business.phoneType === 'landline' ? 'Tel. Fixo: ' : ''}{business.phone}</span>
             </span>
           ) : (
-            <span className="text-[11px] text-zinc-400">Tel: não encontrado</span>
+            <span className="text-[11px] text-zinc-500">Tel: não encontrado</span>
           )}
 
           {business.instagram && (

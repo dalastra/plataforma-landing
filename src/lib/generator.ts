@@ -1,6 +1,113 @@
 import { Business, LandingPageContent, LandingPageProject, LandingPageStyle } from '@/types';
 import { STYLE_PRESETS } from './constants';
 
+export const CATEGORY_STOCK_PHOTOS: Record<
+  string,
+  { hero: string; about: string; gallery: string[] }
+> = {
+  barbearia: {
+    hero: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1512690459411-b9245aed614b?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+  odontologia: {
+    hero: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1606811841689-23dfddce3e95?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1598256989800-fe5f95da9787?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+  estetica: {
+    hero: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1512290900672-1f41b3123869?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1519415510236-718bdfcd89c8?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+  academia: {
+    hero: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+  pizzaria: {
+    hero: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1590947132387-155cc02f3212?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1528137871618-79d2761e3fd5?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+  restaurante: {
+    hero: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+  oficina: {
+    hero: 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1580273916550-e323be2ae537?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1530046339160-ce3e530c7d2f?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+  petshop: {
+    hero: 'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1548767797-d8c844163c4c?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1535268647677-300dbf3d78d1?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1516734212186-a967f81ad0d7?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1541599540903-216a46ca1dc0?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+  imobiliaria: {
+    hero: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1600566753376-12c8ab7fb75b?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+  geral: {
+    hero: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80',
+    about: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1000&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80',
+    ],
+  },
+};
+
+export function getCuratedPhotosForBusiness(business: Business) {
+  const stock = CATEGORY_STOCK_PHOTOS[business.categoryKey] || CATEGORY_STOCK_PHOTOS.geral;
+  const userPhotos = business.photos || [];
+
+  const heroPhoto = userPhotos[0] || stock.hero;
+  const aboutPhoto = userPhotos[1] || userPhotos[0] || stock.about;
+  const galleryPhotos = userPhotos.length >= 3 ? userPhotos : stock.gallery;
+
+  return { heroPhoto, aboutPhoto, galleryPhotos };
+}
+
 export async function generateLandingPageProject(
   business: Business,
   styleOverride?: LandingPageStyle,
@@ -226,6 +333,8 @@ export function generateSemanticContent(
     badge = 'Imóveis Selecionados';
   }
 
+  const { heroPhoto, aboutPhoto, galleryPhotos } = getCuratedPhotosForBusiness(business);
+
   const serviceItems = business.services.map((svc, idx) => ({
     id: `svc-${idx + 1}`,
     title: svc,
@@ -242,7 +351,7 @@ export function generateSemanticContent(
       ctaText,
       ctaWhatsapp: true,
       badge,
-      backgroundImage: business.photos[0] || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=1600&q=80',
+      backgroundImage: heroPhoto,
     },
     about: {
       title: `Conheça a ${business.name}`,
@@ -252,7 +361,7 @@ export function generateSemanticContent(
         'Profissionais experientes e altamente capacitados',
         'Localização de fácil acesso e estacionamento próximo',
       ],
-      image: business.photos[1] || business.photos[0] || 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=800&q=80',
+      image: aboutPhoto,
     },
     services: {
       title: 'Nossos Serviços e Especialidades',
@@ -276,13 +385,6 @@ export function generateSemanticContent(
         },
       ],
     },
-    gallery: {
-      title: 'Galeria & Experiência',
-      images: business.photos.map((url, idx) => ({
-        url,
-        caption: `Experiência ${business.name} #${idx + 1}`,
-      })),
-    },
     testimonials: {
       title: 'Avaliações de Quem Já Conhece',
       items: [
@@ -299,6 +401,13 @@ export function generateSemanticContent(
           rating: 5,
         },
       ],
+    },
+    gallery: {
+      title: 'Conheça nosso espaço e resultados',
+      images: galleryPhotos.map((url, idx) => ({
+        url,
+        caption: `Ambiente e atendimento ${business.name} #${idx + 1}`,
+      })),
     },
     location: {
       title: 'Localização & Contato',

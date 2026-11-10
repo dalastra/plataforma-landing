@@ -31,6 +31,10 @@ export interface Business {
   services: string[];
   opportunityScore: OpportunityLevel;
   opportunityReason: string;
+  phoneType?: 'mobile_whatsapp' | 'landline' | 'unknown';
+  cnpj?: string;
+  legalName?: string;
+  owners?: string[];
   verifiedFields: {
     hasPhysicalLocation: boolean;
     hasPhone: boolean;
@@ -157,6 +161,9 @@ export interface LandingPageProject {
   updatedAt: string;
   status: 'draft' | 'ready' | 'shared';
   vercelUrl?: string;
+  demoViewsCount?: number;
+  lastDemoViewedAt?: string;
+  customDomain?: string;
 }
 
 export type LeadStatus =
@@ -164,6 +171,7 @@ export type LeadStatus =
   | 'analyzed'
   | 'landing_page_created'
   | 'contacted'
+  | 'demo_viewed'
   | 'negotiating'
   | 'won'
   | 'lost';
@@ -176,6 +184,9 @@ export interface Lead {
   projectId?: string;
   notes: string;
   isFavorite: boolean;
+  dealValue?: number;
+  demoViewsCount?: number;
+  lastDemoViewedAt?: string;
   firstContactAt?: string;
   lastContactDate?: string;
   createdAt: string;
