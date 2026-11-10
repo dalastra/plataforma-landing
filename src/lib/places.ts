@@ -1,5 +1,5 @@
-import { Business, WebsiteStatus, OpportunityLevel } from '@/types';
-import { BUSINESS_CATEGORIES } from './constants';
+import { Business, OpportunityLevel } from '@/types';
+import { BUSINESS_CATEGORIES, CategoryDefinition } from './constants';
 import { analyzeOpportunity } from './enricher';
 
 export interface GeocodeResult {
@@ -14,7 +14,7 @@ export async function geocodeLocation(query: string): Promise<GeocodeResult | nu
     const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&addressdetails=1&limit=1&countrycodes=br`;
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'PlataformaLandingProspector/1.0 (contato@prospector.local)',
+        'User-Agent': 'PlataformaLandingProspector/1.0 (ncamposdalastra@gmail.com)',
       },
       next: { revalidate: 3600 },
     });
@@ -23,7 +23,7 @@ export async function geocodeLocation(query: string): Promise<GeocodeResult | nu
       // Try global if BR fails
       const fallbackUrl = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1`;
       const fallbackRes = await fetch(fallbackUrl, {
-        headers: { 'User-Agent': 'PlataformaLandingProspector/1.0' },
+        headers: { 'User-Agent': 'PlataformaLandingProspector/1.0 (ncamposdalastra@gmail.com)' },
       });
       if (!fallbackRes.ok) return null;
       const data = await fallbackRes.json();
@@ -63,20 +63,153 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
   return Math.round(R * c * 10) / 10;
 }
 
-export async function searchPlacesOverpass(
+const CATEGORY_SEARCH_KEYWORDS: Record<string, string[]> = {
+  barbearia: ['barbearia', 'salão de beleza', 'cabeleireiro'],
+  estetica: ['estética', 'clínica de estética', 'depilação laser', 'spa'],
+  odontologia: ['dentista', 'odontologia', 'consultório odontológico', 'clínica odontológica'],
+  academia: ['academia', 'crossfit', 'pilates', 'personal trainer', 'fitness'],
+  restaurante: ['restaurante', 'churrascaria', 'bistrô', 'buffet'],
+  pizzaria: ['pizzaria', 'hamburgueria', 'lanches'],
+  oficina: ['oficina mecânica', 'auto center', 'auto elétrica', 'funilaria'],
+  petshop: ['pet shop', 'veterinária', 'clínica veterinária', 'banho e tosa'],
+  imobiliaria: ['imobiliária', 'corretor de imóveis', 'venda de imóveis'],
+  escola: ['escola particular', 'curso de idiomas', 'colégio', 'berçário'],
+  servicos: ['contabilidade', 'advocacia', 'gráfica rápida', 'coworking'],
+};
+
+// 1. Live Real POI search via OpenStreetMap Nominatim
+async function searchPlacesNominatim(
   lat: number,
   lng: number,
   radiusKm: number,
   categoryKey?: string
 ): Promise<Business[]> {
-  const radiusMeters = Math.min(radiusKm * 1000, 25000); // max 25km
+  const radius = Math.max(radiusKm, 1);
+  const latDelta = radius / 111;
+  const lonDelta = radius / (111 * Math.cos((lat * Math.PI) / 180));
+
+  const minLon = lng - lonDelta;
+  const maxLon = lng + lonDelta;
+  const minLat = lat - latDelta;
+  const maxLat = lat + latDelta;
+  const viewbox = `${minLon.toFixed(6)},${maxLat.toFixed(6)},${maxLon.toFixed(6)},${minLat.toFixed(6)}`;
+
+  let keywordsToSearch: string[] = [];
+  if (categoryKey && categoryKey !== 'todos' && CATEGORY_SEARCH_KEYWORDS[categoryKey]) {
+    keywordsToSearch = CATEGORY_SEARCH_KEYWORDS[categoryKey].slice(0, 2);
+  } else {
+    keywordsToSearch = ['barbearia', 'restaurante', 'dentista', 'academia', 'oficina mecânica', 'pet shop'];
+  }
+
+  const results: Business[] = [];
+  const seenIds = new Set<string>();
+
+  for (const keyword of keywordsToSearch) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+        keyword
+      )}&viewbox=${viewbox}&bounded=1&limit=15&addressdetails=1&extratags=1`;
+
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'PlataformaLandingProspector/1.0 (ncamposdalastra@gmail.com)',
+        },
+        signal: AbortSignal.timeout(6000),
+      });
+
+      if (!res.ok) continue;
+
+      const items = await res.json();
+      if (!Array.isArray(items)) continue;
+
+      for (const item of items) {
+        const id = `osm-${item.osm_type || 'node'}-${item.osm_id || item.place_id}`;
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+
+        const name = item.name || (item.display_name ? item.display_name.split(',')[0] : null);
+        if (!name || name.trim().length < 2) continue;
+
+        const itemLat = parseFloat(item.lat);
+        const itemLng = parseFloat(item.lon);
+        if (isNaN(itemLat) || isNaN(itemLng)) continue;
+
+        const dist = calculateDistanceKm(lat, lng, itemLat, itemLng);
+
+        // Match category
+        let matchedCat = BUSINESS_CATEGORIES[0];
+        if (categoryKey && categoryKey !== 'todos') {
+          const found = BUSINESS_CATEGORIES.find((c) => c.key === categoryKey);
+          if (found) matchedCat = found;
+        } else {
+          for (const [catK, keys] of Object.entries(CATEGORY_SEARCH_KEYWORDS)) {
+            if (keys.some((k) => name.toLowerCase().includes(k) || (item.type && item.type.includes(k)))) {
+              const f = BUSINESS_CATEGORIES.find((c) => c.key === catK);
+              if (f) {
+                matchedCat = f;
+                break;
+              }
+            }
+          }
+        }
+
+        const addr = item.address || {};
+        const road = addr.road || addr.pedestrian || addr.street || '';
+        const houseNum = addr.house_number ? `, ${addr.house_number}` : '';
+        const suburb = addr.suburb || addr.neighbourhood || addr.city_district || '';
+        const city = addr.city || addr.town || addr.municipality || 'Região Metropolitana';
+        const formattedAddress = [road ? `${road}${houseNum}` : '', suburb, city].filter(Boolean).join(' - ') || item.display_name;
+
+        const extratags = item.extratags || {};
+        const rawPhone = extratags['contact:phone'] || extratags.phone || extratags['contact:mobile'];
+        const rawWhatsapp = extratags['contact:whatsapp'] || extratags.whatsapp || rawPhone;
+        const rawWebsite = extratags.website || extratags['contact:website'] || extratags.url;
+        const rawInstagram = extratags['contact:instagram'] || extratags.instagram;
+        const rawFacebook = extratags['contact:facebook'] || extratags.facebook;
+
+        const analyzed = analyzeOpportunity({
+          id,
+          name: name.trim(),
+          category: matchedCat.name,
+          categoryKey: matchedCat.key,
+          address: formattedAddress,
+          neighborhood: suburb || undefined,
+          city: city || undefined,
+          lat: itemLat,
+          lng: itemLng,
+          distanceKm: dist,
+          phone: rawPhone,
+          whatsapp: rawWhatsapp,
+          instagram: rawInstagram,
+          facebook: rawFacebook,
+          rawWebsite,
+          openingHours: extratags.opening_hours ? [extratags.opening_hours] : undefined,
+        });
+
+        results.push(analyzed);
+      }
+    } catch {
+      // Ignore individual keyword failure and continue
+    }
+  }
+
+  return results;
+}
+
+// 2. Overpass API search across multi-mirrors
+async function searchPlacesOverpassEngine(
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  categoryKey?: string
+): Promise<Business[]> {
+  const radiusMeters = Math.min(radiusKm * 1000, 25000);
   const selectedCat = categoryKey && categoryKey !== 'todos'
     ? BUSINESS_CATEGORIES.find((c) => c.key === categoryKey)
     : null;
 
-  // Build Overpass QL query
-  let queries: string[] = [];
-  const categoriesToQuery = selectedCat ? [selectedCat] : BUSINESS_CATEGORIES;
+  const categoriesToQuery = selectedCat ? [selectedCat] : BUSINESS_CATEGORIES.slice(0, 5);
+  const queries: string[] = [];
 
   for (const cat of categoriesToQuery) {
     for (const tag of cat.osmTags) {
@@ -88,317 +221,209 @@ export async function searchPlacesOverpass(
   }
 
   const overpassQuery = `
-    [out:json][timeout:15];
+    [out:json][timeout:10];
     (
-      ${queries.slice(0, 16).join('\n')}
+      ${queries.slice(0, 10).join('\n')}
     );
-    out center 40;
+    out center 35;
   `;
 
-  try {
-    const res = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      body: overpassQuery,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      signal: AbortSignal.timeout(12000),
-    });
+  const mirrors = [
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass-api.de/api/interpreter',
+  ];
 
-    if (!res.ok) {
-      console.warn('Overpass returned non-200, falling back to curated realistic places.');
-      return getCuratedRealisticPlaces(lat, lng, radiusKm, categoryKey);
+  for (const mirror of mirrors) {
+    try {
+      const body = new URLSearchParams({ data: overpassQuery }).toString();
+      const res = await fetch(mirror, {
+        method: 'POST',
+        body,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'PlataformaLanding/1.0 (ncamposdalastra@gmail.com)',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+
+      if (!res.ok) continue;
+
+      const data = await res.json();
+      const elements = data.elements || [];
+      if (!Array.isArray(elements) || elements.length === 0) continue;
+
+      const businesses: Business[] = [];
+      for (const el of elements) {
+        const tags = el.tags || {};
+        const name = tags.name || tags['name:pt'] || tags.brand;
+        if (!name) continue;
+
+        const itemLat = el.lat || (el.center && el.center.lat);
+        const itemLng = el.lon || (el.center && el.center.lon);
+        if (!itemLat || !itemLng) continue;
+
+        const dist = calculateDistanceKm(lat, lng, itemLat, itemLng);
+
+        let matchedCategory = BUSINESS_CATEGORIES[0];
+        for (const cat of BUSINESS_CATEGORIES) {
+          let found = false;
+          for (const tag of cat.osmTags) {
+            if (tag.values.includes(tags[tag.key])) {
+              matchedCategory = cat;
+              found = true;
+              break;
+            }
+          }
+          if (found) break;
+        }
+
+        const rawWebsite = tags.website || tags['contact:website'] || tags.url;
+        const rawInstagram = tags['contact:instagram'] || tags.instagram;
+        const rawFacebook = tags['contact:facebook'] || tags.facebook;
+        const rawPhone = tags.phone || tags['contact:phone'];
+        const rawWhatsapp = tags['contact:whatsapp'] || tags.whatsapp || rawPhone;
+
+        const addrStreet = tags['addr:street']
+          ? `${tags['addr:street']}${tags['addr:housenumber'] ? ', ' + tags['addr:housenumber'] : ''}`
+          : '';
+        const addrSuburb = tags['addr:suburb'] || tags['addr:neighbourhood'] || '';
+        const addrCity = tags['addr:city'] || '';
+        const formattedAddress = [addrStreet, addrSuburb, addrCity].filter(Boolean).join(' - ') || 'Endereço registrado';
+
+        const analyzed = analyzeOpportunity({
+          id: `osm-${el.id}`,
+          name: name.trim(),
+          category: matchedCategory.name,
+          categoryKey: matchedCategory.key,
+          address: formattedAddress,
+          neighborhood: addrSuburb || undefined,
+          city: addrCity || undefined,
+          lat: itemLat,
+          lng: itemLng,
+          distanceKm: dist,
+          phone: rawPhone,
+          whatsapp: rawWhatsapp,
+          instagram: rawInstagram,
+          facebook: rawFacebook,
+          rawWebsite,
+          openingHours: tags.opening_hours ? [tags.opening_hours] : undefined,
+        });
+
+        businesses.push(analyzed);
+      }
+
+      if (businesses.length > 0) {
+        return businesses;
+      }
+    } catch {
+      // Continue to next mirror
     }
+  }
+
+  return [];
+}
+
+// 3. Google Places API (when API key is provided)
+async function searchPlacesGoogle(
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  categoryKey?: string
+): Promise<Business[]> {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
+  if (!apiKey) return [];
+
+  try {
+    const radiusMeters = Math.min(radiusKm * 1000, 50000);
+    const keyword = categoryKey && categoryKey !== 'todos' && CATEGORY_SEARCH_KEYWORDS[categoryKey]
+      ? CATEGORY_SEARCH_KEYWORDS[categoryKey][0]
+      : 'comercio local';
+
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radiusMeters}&keyword=${encodeURIComponent(
+      keyword
+    )}&key=${apiKey}&language=pt-BR`;
+
+    const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return [];
 
     const data = await res.json();
-    const elements = data.elements || [];
-
-    if (elements.length === 0) {
-      return getCuratedRealisticPlaces(lat, lng, radiusKm, categoryKey);
-    }
-
+    const results = data.results || [];
     const businesses: Business[] = [];
 
-    for (const el of elements) {
-      const tags = el.tags || {};
-      const name = tags.name || tags['name:pt'] || tags.brand;
-      if (!name) continue; // Skip unnamed POIs
-
-      const itemLat = el.lat || (el.center && el.center.lat);
-      const itemLng = el.lon || (el.center && el.center.lon);
+    for (const place of results) {
+      if (!place.name) continue;
+      const itemLat = place.geometry?.location?.lat;
+      const itemLng = place.geometry?.location?.lng;
       if (!itemLat || !itemLng) continue;
 
       const dist = calculateDistanceKm(lat, lng, itemLat, itemLng);
-
-      // Match category
-      let matchedCategory = BUSINESS_CATEGORIES[0];
-      for (const cat of BUSINESS_CATEGORIES) {
-        let found = false;
-        for (const tag of cat.osmTags) {
-          if (tag.values.includes(tags[tag.key])) {
-            matchedCategory = cat;
-            found = true;
-            break;
-          }
-        }
-        if (found) break;
-      }
-
-      // Website inspection
-      const rawWebsite = tags.website || tags['contact:website'] || tags.url;
-      const rawInstagram = tags['contact:instagram'] || tags.instagram;
-      const rawFacebook = tags['contact:facebook'] || tags.facebook;
-      const rawPhone = tags.phone || tags['contact:phone'];
-      const rawWhatsapp = tags['contact:whatsapp'] || tags.whatsapp || rawPhone;
-
-      const addrStreet = tags['addr:street']
-        ? `${tags['addr:street']}${tags['addr:housenumber'] ? ', ' + tags['addr:housenumber'] : ''}`
-        : '';
-      const addrSuburb = tags['addr:suburb'] || tags['addr:neighbourhood'] || '';
-      const addrCity = tags['addr:city'] || '';
-      const formattedAddress = [addrStreet, addrSuburb, addrCity].filter(Boolean).join(' - ') || 'Endereço registrado na região';
+      const cat = (categoryKey && categoryKey !== 'todos' && BUSINESS_CATEGORIES.find((c) => c.key === categoryKey)) || BUSINESS_CATEGORIES[0];
 
       const analyzed = analyzeOpportunity({
-        id: `osm-${el.id}`,
-        name: name.trim(),
-        category: matchedCategory.name,
-        categoryKey: matchedCategory.key,
-        address: formattedAddress,
-        neighborhood: addrSuburb || undefined,
-        city: addrCity || undefined,
+        id: `google-${place.place_id}`,
+        name: place.name,
+        category: cat.name,
+        categoryKey: cat.key,
+        address: place.vicinity || 'Endereço local',
         lat: itemLat,
         lng: itemLng,
         distanceKm: dist,
-        phone: rawPhone,
-        whatsapp: rawWhatsapp,
-        instagram: rawInstagram,
-        facebook: rawFacebook,
-        rawWebsite,
-        openingHours: tags.opening_hours ? [tags.opening_hours] : undefined,
+        rating: place.rating,
+        reviewCount: place.user_ratings_total,
       });
 
       businesses.push(analyzed);
     }
 
-    if (businesses.length === 0) {
-      return getCuratedRealisticPlaces(lat, lng, radiusKm, categoryKey);
-    }
-
-    // Sort by opportunity (high first) and distance
-    return sortBusinesses(businesses);
+    return businesses;
   } catch (err) {
-    console.error('Overpass search error:', err);
-    return getCuratedRealisticPlaces(lat, lng, radiusKm, categoryKey);
+    console.warn('Google Places API search failed:', err);
+    return [];
   }
 }
 
-function sortBusinesses(businesses: Business[]): Business[] {
+// Main Discovery Function: 100% Real Live Places
+export async function searchPlacesOverpass(
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  categoryKey?: string
+): Promise<Business[]> {
+  // Strategy 1: Google Places if key configured
+  const googleResults = await searchPlacesGoogle(lat, lng, radiusKm, categoryKey);
+  if (googleResults.length > 0) {
+    return sortBusinesses(googleResults);
+  }
+
+  // Strategy 2: Fast live Nominatim POI search with bounded viewbox
+  const nominatimResults = await searchPlacesNominatim(lat, lng, radiusKm, categoryKey);
+  if (nominatimResults.length > 0) {
+    return sortBusinesses(nominatimResults);
+  }
+
+  // Strategy 3: Overpass multi-mirrors
+  const overpassResults = await searchPlacesOverpassEngine(lat, lng, radiusKm, categoryKey);
+  if (overpassResults.length > 0) {
+    return sortBusinesses(overpassResults);
+  }
+
+  // Strategy 4: If strictly no POIs found in a tiny radius, expand radius slightly (up to 15km)
+  if (radiusKm < 15) {
+    const expandedNominatim = await searchPlacesNominatim(lat, lng, 15, categoryKey);
+    if (expandedNominatim.length > 0) {
+      return sortBusinesses(expandedNominatim);
+    }
+  }
+
+  // If still nothing, return empty array (NO FAKE DATA)
+  return [];
+}
+
+export function sortBusinesses(businesses: Business[]): Business[] {
   const priority: Record<OpportunityLevel, number> = { high: 3, medium: 2, low: 1 };
   return businesses.sort((a, b) => {
     const scoreDiff = priority[b.opportunityScore] - priority[a.opportunityScore];
     if (scoreDiff !== 0) return scoreDiff;
     return (a.distanceKm || 0) - (b.distanceKm || 0);
   });
-}
-
-// Curated realistic local business dataset anchored to requested coordinate
-export function getCuratedRealisticPlaces(
-  centerLat: number,
-  centerLng: number,
-  radiusKm: number,
-  categoryKey?: string
-): Business[] {
-  const samples = [
-    {
-      name: 'Barbearia Navalha de Ouro',
-      catKey: 'barbearia',
-      catName: 'Barbearias e Salões de Beleza',
-      offsetLat: 0.004,
-      offsetLng: 0.003,
-      phone: '(11) 98765-4321',
-      whatsapp: '5511987654321',
-      instagram: '@navalhadouro.oficial',
-      rawWebsite: '',
-      rating: 4.8,
-      reviewCount: 142,
-      address: 'Rua das Palmeiras, 342 - Centro',
-      hours: ['Segunda a Sábado: 09:00 às 20:00'],
-      services: ['Corte Degradê & Fade', 'Barba Terapia com Toalha Quente', 'Tratamento Capilar', 'Pigmentação'],
-    },
-    {
-      name: 'Dra. Camila Toledo Odontologia',
-      catKey: 'odontologia',
-      catName: 'Clínicas Odontológicas',
-      offsetLat: -0.006,
-      offsetLng: 0.005,
-      phone: '(11) 97654-3210',
-      whatsapp: '5511976543210',
-      instagram: '@dracamilatoledo.odonto',
-      rawWebsite: 'https://instagram.com/dracamilatoledo.odonto',
-      rating: 4.9,
-      reviewCount: 98,
-      address: 'Av. Paulista, 1200 - Conjunto 84',
-      hours: ['Segunda a Sexta: 08:30 às 19:00', 'Sábado: 08:30 às 13:00'],
-      services: ['Invisalign Doctor', 'Clareamento a Laser', 'Lentes em Resina Composta', 'Implantes'],
-    },
-    {
-      name: 'Studio Iron Fitness & Personal',
-      catKey: 'academia',
-      catName: 'Academias e Personal',
-      offsetLat: 0.008,
-      offsetLng: -0.007,
-      phone: '(11) 96543-2109',
-      whatsapp: '5511965432109',
-      instagram: '@ironfitness.studio',
-      rawWebsite: '',
-      rating: 4.7,
-      reviewCount: 86,
-      address: 'Rua Vergueiro, 789',
-      hours: ['Segunda a Sexta: 06:00 às 22:00', 'Sábados: 08:00 às 16:00'],
-      services: ['Musculação Personalizada', 'Treinamento Funcional', 'Acompanhamento Nutricional', 'Cross Training'],
-    },
-    {
-      name: 'Trattoria & Cantina Bella Napoli',
-      catKey: 'restaurante',
-      catName: 'Restaurantes e Lanchonetes',
-      offsetLat: -0.003,
-      offsetLng: -0.004,
-      phone: '(11) 3214-5566',
-      whatsapp: '5511954321098',
-      instagram: '@bellanapoli.cantina',
-      rawWebsite: 'https://www.ifood.com.br/delivery/sp/cantina-bella-napoli',
-      rating: 4.6,
-      reviewCount: 310,
-      address: 'Alameda Santos, 450',
-      hours: ['Terça a Domingo: 12:00 às 15:30 e 19:00 às 23:00'],
-      services: ['Massas Artesanais', 'Pizzas Fermentação Natural', 'Carta de Vinhos Selecionados', 'Espaço para Eventos'],
-    },
-    {
-      name: 'Centro Automotivo Precisão & Torque',
-      catKey: 'oficina',
-      catName: 'Oficinas Mecânicas & Auto Centers',
-      offsetLat: 0.012,
-      offsetLng: 0.009,
-      phone: '(11) 94321-0987',
-      whatsapp: '5511943210987',
-      instagram: '',
-      rawWebsite: '',
-      rating: 4.5,
-      reviewCount: 64,
-      address: 'Av. Ibirapuera, 2300',
-      hours: ['Segunda a Sexta: 08:00 às 18:00', 'Sábado: 08:00 às 12:00'],
-      services: ['Diagnóstico Computadorizado', 'Suspensão e Amortecedores', 'Troca de Correia e Óleo', 'Freios ABS'],
-    },
-    {
-      name: 'Clínica Lumina Estética Avançada',
-      catKey: 'estetica',
-      catName: 'Clínicas de Estética',
-      offsetLat: -0.005,
-      offsetLng: 0.008,
-      phone: '(11) 93210-9876',
-      whatsapp: '5511932109876',
-      instagram: '@lumina.esteticaavancada',
-      rawWebsite: '',
-      rating: 4.9,
-      reviewCount: 118,
-      address: 'Rua Oscar Freire, 910 - Sala 4',
-      hours: ['Segunda a Sexta: 09:00 às 19:00'],
-      services: ['Harmonização Facial', 'Bioestimuladores de Colágeno', 'Depilação a Laser Soprano', 'Drenagem Linfática'],
-    },
-    {
-      name: 'Pet Spa & Vet Amigo Fiel',
-      catKey: 'petshop',
-      catName: 'Pet Shops e Veterinárias',
-      offsetLat: 0.006,
-      offsetLng: -0.009,
-      phone: '(11) 92109-8765',
-      whatsapp: '5511921098765',
-      instagram: '@amigofiel.petvet',
-      rawWebsite: '',
-      rating: 4.8,
-      reviewCount: 153,
-      address: 'Rua Bela Cintra, 1450',
-      hours: ['Segunda a Sábado: 08:00 às 19:00'],
-      services: ['Banho & Tosa com Ozonioterapia', 'Consultas Veterinárias Especializadas', 'Vacinas Importadas', 'Táxi Pet Climatizado'],
-    },
-    {
-      name: 'Pizzaria Napolitana Dom Vincenzo',
-      catKey: 'pizzaria',
-      catName: 'Pizzarias e Hamburguerias',
-      offsetLat: -0.009,
-      offsetLng: -0.006,
-      phone: '(11) 3456-7890',
-      whatsapp: '5511910987654',
-      instagram: '@domvincenzo.pizza',
-      rawWebsite: 'https://www.ifood.com.br/delivery/sp/dom-vincenzo',
-      rating: 4.7,
-      reviewCount: 280,
-      address: 'Rua Augusta, 2100',
-      hours: ['Todos os dias: 18:00 às 23:30'],
-      services: ['Pizzas Clássicas Italianas', 'Bordas Recheadas Especiais', 'Delivery Próprio Rápido', 'Carta de Cervejas Artesanais'],
-    },
-    {
-      name: 'Vanguard Prime Imóveis',
-      catKey: 'imobiliaria',
-      catName: 'Imobiliárias e Corretores',
-      offsetLat: 0.007,
-      offsetLng: 0.011,
-      phone: '(11) 90987-6543',
-      whatsapp: '5511909876543',
-      instagram: '@vanguardprime.imoveis',
-      rawWebsite: 'https://www.vanguardprimeimoveis.com.br',
-      rating: 4.6,
-      reviewCount: 45,
-      address: 'Av. Brigadeiro Faria Lima, 3100',
-      hours: ['Segunda a Sexta: 09:00 às 18:30'],
-      services: ['Apartamentos de Alto Padrão', 'Casas em Condomínio Fechado', 'Locação Corporativa', 'Consultoria de Investimento'],
-    },
-    {
-      name: 'Smart Solutions Contabilidade & Negócios',
-      catKey: 'servicos',
-      catName: 'Empresas de Serviços Locais',
-      offsetLat: 0.003,
-      offsetLng: -0.005,
-      phone: '(11) 3012-3456',
-      whatsapp: '5511989012345',
-      instagram: '',
-      rawWebsite: '',
-      rating: 4.3,
-      reviewCount: 22,
-      address: 'Rua Funchal, 500 - 12º andar',
-      hours: ['Segunda a Sexta: 08:30 às 17:30'],
-      services: ['Abertura de Empresas', 'Gestão Fiscal e Tributária', 'BPO Financeiro', 'Consultoria Trabalhista'],
-    },
-  ];
-
-  const filtered = categoryKey && categoryKey !== 'todos'
-    ? samples.filter((s) => s.catKey === categoryKey)
-    : samples;
-
-  const results: Business[] = filtered.map((s, idx) => {
-    const lat = centerLat + s.offsetLat;
-    const lng = centerLng + s.offsetLng;
-    const dist = calculateDistanceKm(centerLat, centerLng, lat, lng);
-
-    return analyzeOpportunity({
-      id: `seed-${idx + 1}-${s.catKey}`,
-      name: s.name,
-      category: s.catName,
-      categoryKey: s.catKey,
-      address: s.address,
-      neighborhood: 'Bairro Nobre',
-      city: 'São Paulo',
-      lat,
-      lng,
-      distanceKm: dist,
-      phone: s.phone,
-      whatsapp: s.whatsapp,
-      instagram: s.instagram,
-      rawWebsite: s.rawWebsite,
-      rating: s.rating,
-      reviewCount: s.reviewCount,
-      openingHours: s.hours,
-      services: s.services,
-    });
-  });
-
-  return sortBusinesses(results);
 }
