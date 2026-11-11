@@ -80,6 +80,9 @@ export default function CadastroPage() {
     try {
       setLoading(true);
 
+      const emailRedirectTo =
+        typeof window !== 'undefined' ? `${window.location.origin}/login` : undefined;
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -87,6 +90,7 @@ export default function CadastroPage() {
           data: {
             full_name: fullName.trim(),
           },
+          emailRedirectTo,
         },
       });
 
