@@ -11,7 +11,11 @@ export async function POST(req: NextRequest) {
     let geocodeResult = null;
 
     if (query && typeof query === 'string' && query.trim().length > 0) {
-      geocodeResult = await geocodeLocation(query.trim());
+      geocodeResult = await geocodeLocation(
+        query.trim(),
+        lat ? Number(lat) : undefined,
+        lng ? Number(lng) : undefined
+      );
       if (geocodeResult) {
         lat = geocodeResult.lat;
         lng = geocodeResult.lng;
@@ -33,7 +37,8 @@ export async function POST(req: NextRequest) {
       Number(lat),
       Number(lng),
       Number(radiusKm),
-      categoryKey
+      categoryKey,
+      query ? String(query).trim() : undefined
     );
 
     // Save search history in background if user is authenticated
@@ -54,15 +59,15 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch (err) {
-      // Non-blocking log error
       console.warn('Could not record search history:', err);
     }
 
     return NextResponse.json({
       success: true,
+      count: businesses.length,
+      noWebsiteCount: businesses.filter((b) => b.websiteStatus !== 'own_website').length,
       center: { lat: Number(lat), lng: Number(lng) },
       geocode: geocodeResult,
-      total: businesses.length,
       businesses,
     });
   } catch (error: any) {

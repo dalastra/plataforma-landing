@@ -13,6 +13,8 @@ import {
   ChevronDown,
   Layers,
   Download,
+  Flame,
+  Globe,
 } from 'lucide-react';
 import { Business, LandingPageProject } from '@/types';
 import { BUSINESS_CATEGORIES } from '@/lib/constants';
@@ -40,7 +42,7 @@ export default function DescobertaPage() {
   const [radiusKm, setRadiusKm] = useState<number>(5);
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [filterOpportunity, setFilterOpportunity] = useState<string>('todos');
-  const [filterNoWebsite, setFilterNoWebsite] = useState<boolean>(false);
+  const [filterNoWebsite, setFilterNoWebsite] = useState<boolean>(true); // Ativo por padrão conforme solicitado
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -76,7 +78,6 @@ export default function DescobertaPage() {
 
     try {
       if (!isCurrentlyFav) {
-        // Save to leads in DB
         await fetch('/api/leads', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -104,13 +105,17 @@ export default function DescobertaPage() {
   async function handleSearch(lat?: number, lng?: number, queryOverride?: string) {
     try {
       setLoading(true);
+      const targetLat = lat !== undefined ? lat : center.lat;
+      const targetLng = lng !== undefined ? lng : center.lng;
+      const targetQuery = queryOverride !== undefined ? queryOverride : searchQuery;
+
       const res = await fetch('/api/places/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          lat: lat || center.lat,
-          lng: lng || center.lng,
-          query: queryOverride !== undefined ? queryOverride : searchQuery,
+          lat: targetLat,
+          lng: targetLng,
+          query: targetQuery,
           radiusKm,
           categoryKey: selectedCategory,
         }),
@@ -158,7 +163,7 @@ export default function DescobertaPage() {
       (err) => {
         setLoading(false);
         console.warn('Geolocation error:', err);
-        alert('Não foi possível obter a sua localização. Você pode digitar sua cidade ou bairro manualmente.');
+        alert('Não foi possível obter a sua localização. Você pode digitar sua cidade, rua ou bairro manualmente.');
       },
       { timeout: 10000 }
     );
@@ -207,7 +212,7 @@ export default function DescobertaPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `estabelecimentos-prospeccao-${Date.now()}.csv`;
+    a.download = `estabelecimentos-sem-site-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -218,6 +223,8 @@ export default function DescobertaPage() {
     if (filterNoWebsite && b.websiteStatus === 'own_website') return false;
     return true;
   });
+
+  const countNoWebsite = businesses.filter((b) => b.websiteStatus !== 'own_website').length;
 
   return (
     <div className="p-4 md:p-6 max-w-[1600px] mx-auto w-full space-y-5">
@@ -232,7 +239,7 @@ export default function DescobertaPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Digite uma cidade, bairro ou endereço (ex: Moema, São Paulo ou Copacabana, RJ)..."
+              placeholder="Digite rua, bairro ou cidade (ex: Rua do Retiro, Jundiaí ou Moema, SP)..."
               className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-blue-500"
             />
           </div>
@@ -356,10 +363,10 @@ export default function DescobertaPage() {
         {/* Right: Opportunities List & Quick Filters */}
         <div className="lg:col-span-5 flex flex-col h-full rounded-2xl bg-[#121215] border border-zinc-800 shadow-xl overflow-hidden">
           {/* Filter Bar Header */}
-          <div className="p-4 border-b border-zinc-800 bg-[#0c0c0e] space-y-2">
+          <div className="p-4 border-b border-zinc-800 bg-[#0c0c0e] space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm text-white">Resultados Mapeados</span>
+                <span className="font-bold text-sm text-white">Negócios Mapeados</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/20 font-semibold">
                   {filteredBusinesses.length}
                 </span>
@@ -369,7 +376,7 @@ export default function DescobertaPage() {
               <select
                 value={filterOpportunity}
                 onChange={(e) => setFilterOpportunity(e.target.value)}
-                className="text-xs bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-zinc-300 focus:outline-none"
+                className="text-xs bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-zinc-300 focus:outline-none"
               >
                 <option value="todos">Todas as Oportunidades</option>
                 <option value="high">Apenas Alta Oportunidade</option>
@@ -378,16 +385,25 @@ export default function DescobertaPage() {
               </select>
             </div>
 
-            {/* Quick Toggle: Sem Site */}
-            <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer pt-1">
-              <input
-                type="checkbox"
-                checked={filterNoWebsite}
-                onChange={(e) => setFilterNoWebsite(e.target.checked)}
-                className="rounded border-zinc-700 bg-zinc-900 text-blue-600 focus:ring-0"
-              />
-              <span>Ocultar negócios que já possuem site próprio</span>
-            </label>
+            {/* Prominent Toggle: Apenas Sem Site */}
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => setFilterNoWebsite(!filterNoWebsite)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                  filterNoWebsite
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-sm shadow-emerald-500/10'
+                    : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                }`}
+              >
+                <Flame className={`w-3.5 h-3.5 ${filterNoWebsite ? 'text-emerald-400' : 'text-zinc-500'}`} />
+                <span>Apenas Sem Site Próprio ({countNoWebsite})</span>
+              </button>
+
+              <span className="text-[11px] text-zinc-500">
+                {filterNoWebsite ? 'Filtrando oportunidades puras' : 'Exibindo todos'}
+              </span>
+            </div>
           </div>
 
           {/* Scrollable Cards Container */}
@@ -395,13 +411,14 @@ export default function DescobertaPage() {
             {loading ? (
               <div className="flex flex-col items-center justify-center h-64 text-zinc-500 text-sm">
                 <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-2" />
-                <span>Mapeando estabelecimentos e analisando IA...</span>
+                <span className="font-semibold text-zinc-300">Localizando estabelecimentos e verificando sites...</span>
+                <span className="text-xs text-zinc-500 mt-1">Conferindo Google, OSM e domínios na web</span>
               </div>
             ) : filteredBusinesses.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center p-6 text-zinc-500 text-sm">
                 <Compass className="w-8 h-8 mb-2 opacity-50" />
                 <p className="font-medium text-zinc-400">Nenhum estabelecimento encontrado com esses filtros.</p>
-                <p className="text-xs text-zinc-600 mt-1">Tente aumentar o raio de busca ou selecionar outra categoria.</p>
+                <p className="text-xs text-zinc-600 mt-1">Tente desmarcar &quot;Apenas Sem Site&quot; ou aumentar o raio de busca.</p>
               </div>
             ) : (
               filteredBusinesses.map((biz) => (
