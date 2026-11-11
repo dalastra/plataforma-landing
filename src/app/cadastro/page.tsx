@@ -96,17 +96,15 @@ export default function CadastroPage() {
       }
 
       if (data.session) {
-        // Logged in immediately (email confirmation turned off)
         router.push('/');
         router.refresh();
       } else {
-        // Confirmation email sent
         setSuccessMessage(
           'Conta criada com sucesso! Enviamos um link de confirmação para o seu e-mail. Por favor, verifique sua caixa de entrada.'
         );
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erro ao criar conta.');
+      setErrorMessage(err.message || 'Ocorreu um erro ao criar a conta.');
     } finally {
       setLoading(false);
     }
@@ -114,8 +112,9 @@ export default function CadastroPage() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#09090b] text-[#f4f4f5] relative overflow-hidden">
-      {/* Background Glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Background Glow Accents */}
+      <div className="absolute top-1/4 right-1/2 translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 left-1/4 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md relative z-10 animate-in fade-in duration-300">
         {/* Brand Header */}
@@ -124,10 +123,10 @@ export default function CadastroPage() {
             <Target className="w-6 h-6" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white">
-            Criar Nova Conta
+            LeadCraft AI
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Cadastre-se para prospectar clientes e gerar landing pages
+            Crie sua conta e comece a prospectar clientes com inteligência
           </p>
         </div>
 
@@ -140,23 +139,20 @@ export default function CadastroPage() {
             </div>
           )}
 
-          {successMessage && (
-            <div className="p-4 mb-5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-start gap-2.5 animate-in fade-in">
-              <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-              <div className="leading-relaxed">
-                <p className="font-bold mb-1">Quase lá!</p>
-                <p>{successMessage}</p>
-                <Link
-                  href="/login"
-                  className="inline-block mt-3 px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold text-xs"
-                >
-                  Ir para a tela de Login
-                </Link>
-              </div>
+          {successMessage ? (
+            <div className="p-5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-center animate-in fade-in">
+              <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-emerald-400" />
+              <h3 className="text-sm font-bold text-white mb-1">Verifique seu e-mail</h3>
+              <p className="text-xs text-zinc-300 leading-relaxed mb-4">{successMessage}</p>
+              <Link
+                href="/login"
+                className="inline-flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors"
+              >
+                <span>Ir para o login</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
             </div>
-          )}
-
-          {!successMessage && (
+          ) : (
             <form onSubmit={handleSignUp} className="space-y-4">
               {/* Full Name */}
               <div>
@@ -169,14 +165,15 @@ export default function CadastroPage() {
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Seu Nome Completo"
+                    placeholder="Ex: Carlos Oliveira"
+                    autoComplete="name"
                     required
                     className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500 transition-colors"
                   />
                 </div>
               </div>
 
-              {/* Email */}
+              {/* E-mail */}
               <div>
                 <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
                   E-mail Profissional
@@ -215,6 +212,7 @@ export default function CadastroPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                    title={showPassword ? 'Ocultar senha' : 'Exibir senha'}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -224,17 +222,38 @@ export default function CadastroPage() {
                 {password && (
                   <div className="mt-2 space-y-1">
                     <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-zinc-500">Força da senha:</span>
-                      <span className={`font-semibold ${
-                        strength.score === 1 ? 'text-rose-400' : strength.score === 2 ? 'text-amber-400' : 'text-emerald-400'
-                      }`}>
+                      <span className="text-zinc-400">Força da senha:</span>
+                      <span
+                        className={`font-semibold ${
+                          strength.score === 1
+                            ? 'text-rose-400'
+                            : strength.score === 2
+                            ? 'text-amber-400'
+                            : 'text-emerald-400'
+                        }`}
+                      >
                         {strength.label}
                       </span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1.5 h-1">
-                      <div className={`rounded-full ${strength.score >= 1 ? strength.color : 'bg-zinc-800'}`} />
-                      <div className={`rounded-full ${strength.score >= 2 ? strength.color : 'bg-zinc-800'}`} />
-                      <div className={`rounded-full ${strength.score >= 3 ? strength.color : 'bg-zinc-800'}`} />
+                    <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden flex gap-1">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          strength.score >= 1 ? strength.color : 'bg-transparent'
+                        }`}
+                        style={{ width: '33.33%' }}
+                      />
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          strength.score >= 2 ? strength.color : 'bg-transparent'
+                        }`}
+                        style={{ width: '33.33%' }}
+                      />
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          strength.score >= 3 ? strength.color : 'bg-transparent'
+                        }`}
+                        style={{ width: '33.33%' }}
+                      />
                     </div>
                   </div>
                 )}
@@ -246,7 +265,7 @@ export default function CadastroPage() {
                   Confirmar Senha
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <ShieldCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={confirmPassword}
@@ -293,27 +312,6 @@ export default function CadastroPage() {
                   </>
                 )}
               </button>
-
-              <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-zinc-800" />
-                </div>
-                <div className="relative flex justify-center text-[10px] uppercase">
-                  <span className="bg-[#121215] px-2 text-zinc-500 font-semibold tracking-wider">
-                    Ou
-                  </span>
-                </div>
-              </div>
-
-              <Link
-                href="/login?vercel=true"
-                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl bg-black hover:bg-zinc-900 text-white font-semibold text-xs border border-zinc-800 hover:border-zinc-700 transition-all shadow-sm"
-              >
-                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 1155 1000">
-                  <path d="m577.3 0 577.4 1000H0z" />
-                </svg>
-                <span>Cadastrar com sua Conta Vercel</span>
-              </Link>
             </form>
           )}
 
