@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { geocodeLocation, searchPlacesOverpass } from '@/lib/places';
 import { createClient } from '@/lib/supabase/server';
 import { recordSearchHistory } from '@/lib/db';
+
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
@@ -78,3 +80,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

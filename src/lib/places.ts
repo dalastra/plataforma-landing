@@ -1,4 +1,4 @@
-import { Business, OpportunityLevel, WebsiteStatus } from '@/types';
+﻿import { Business, OpportunityLevel, WebsiteStatus } from '@/types';
 import { BUSINESS_CATEGORIES, CategoryDefinition } from './constants';
 import { analyzeOpportunity } from './enricher';
 
@@ -62,7 +62,7 @@ export function isBusinessOwnDomain(domain: string, businessName: string): boole
 export async function verifyBusinessWebsiteDeep(
   name: string,
   city?: string
-): Promise<{ hasWebsite: boolean; url?: string }> {
+): Promise<{ hasWebsite: boolean; url?: string; checked: boolean }> {
   try {
     const query = encodeURIComponent(`"${name}" ${city || ''}`);
     const url = `https://html.duckduckgo.com/html/?q=${query}`;
@@ -74,7 +74,7 @@ export async function verifyBusinessWebsiteDeep(
       signal: AbortSignal.timeout(3500),
     });
 
-    if (!res.ok) return { hasWebsite: false };
+    if (!res.ok) return { hasWebsite: false, checked: false };
     const html = await res.text();
     const urlMatches = html.match(/class="result__url"[^>]*>([^<]+)</g) || [];
     const domains = urlMatches.map((m) => {
@@ -86,13 +86,14 @@ export async function verifyBusinessWebsiteDeep(
       const clean = d.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
       const isDir = DIRECTORY_DOMAINS.some((ign) => clean.includes(ign));
       if (!isDir && isBusinessOwnDomain(clean, name)) {
-        return { hasWebsite: true, url: 'https://' + clean };
+        return { hasWebsite: true, url: 'https://' + clean, checked: true };
       }
     }
 
-    return { hasWebsite: false };
+    // Search engine answered but returned no results at all => inconclusive (probably blocked)
+    return { hasWebsite: false, checked: domains.length > 0 };
   } catch {
-    return { hasWebsite: false };
+    return { hasWebsite: false, checked: false };
   }
 }
 
@@ -103,6 +104,36 @@ export async function geocodeLocation(
 ): Promise<GeocodeResult | null> {
   try {
     const encoded = encodeURIComponent(query);
+
+    // If proximity coordinates provided, try Photon first (instant and strongly proximity-biased)
+    if (userLat && userLng) {
+      try {
+        const photonUrl = `https://photon.komoot.io/api/?q=${encoded}&lat=${userLat}&lon=${userLng}&limit=3`;
+        const photonRes = await fetch(photonUrl, {
+          headers: { 'User-Agent': 'LeadCraftAI/2.0 (ncamposdalastra@gmail.com)' },
+          signal: AbortSignal.timeout(3000),
+        });
+        if (photonRes.ok) {
+          const photonData = await photonRes.json();
+          const first = photonData?.features?.[0];
+          if (first && first.geometry?.coordinates) {
+            const [pLng, pLat] = first.geometry.coordinates;
+            const p = first.properties || {};
+            const displayName = [p.name, p.locality || p.district, p.city, p.state, p.country]
+              .filter(Boolean)
+              .join(', ');
+            return {
+              lat: pLat,
+              lng: pLng,
+              displayName: displayName || query,
+            };
+          }
+        }
+      } catch {
+        // Fall back to Nominatim
+      }
+    }
+
     let viewboxParam = '';
 
     // If proximity coordinates provided, bias geocoding towards user's regional area
@@ -212,7 +243,26 @@ const ALL_CATEGORIES_EXPANDED = [
   'veterinária',
   'padaria',
   'cafeteria',
-  'clínica'
+  'clínica',
+  'farmácia',
+  'supermercado',
+  'mercado',
+  'açougue',
+  'hamburgueria',
+  'sorveteria',
+  'bar',
+  'loja de roupas',
+  'estética',
+  'escola',
+  'curso',
+  'imobiliária',
+  'contabilidade',
+  'advocacia',
+  'floricultura',
+  'material de construção',
+  'ótica',
+  'lava rápido',
+  'borracharia',
 ];
 
 // 1. Live Real POI search via OpenStreetMap Nominatim with street and category expansion
@@ -251,14 +301,18 @@ async function searchPlacesNominatim(
   const seenNames = new Set<string>();
 
   // Run in chunks of 4 concurrent requests
-  const chunkSize = 4;
+  keywordsToSearch = keywordsToSearch.slice(0, 14);
+  let rateLimited = false;
+  const chunkSize = 1; // Nominatim policy: max ~1 request/second
   for (let i = 0; i < keywordsToSearch.length; i += chunkSize) {
+    if (rateLimited) break;
     const chunk = keywordsToSearch.slice(i, i + chunkSize);
     const promises = chunk.map(async (keyword) => {
       try {
+        await new Promise((r) => setTimeout(r, 1100));
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
           keyword
-        )}&viewbox=${viewbox}&bounded=1&limit=25&addressdetails=1&extratags=1`;
+        )}&viewbox=${viewbox}&bounded=1&limit=40&addressdetails=1&extratags=1`;
 
         const res = await fetch(url, {
           headers: {
@@ -267,17 +321,18 @@ async function searchPlacesNominatim(
           signal: AbortSignal.timeout(5000),
         });
 
-        if (!res.ok) return [];
+        if (res.status === 429) rateLimited = true;
+        if (!res.ok) return { keyword, items: [] as any[] };
         const items = await res.json();
-        return Array.isArray(items) ? items : [];
+        return { keyword, items: Array.isArray(items) ? items : [] };
       } catch {
-        return [];
+        return { keyword, items: [] as any[] };
       }
     });
 
     const chunkResults = await Promise.all(promises);
 
-    for (const items of chunkResults) {
+    for (const { keyword: foundByKeyword, items } of chunkResults) {
       for (const item of items) {
         const name = item.name || (item.display_name ? item.display_name.split(',')[0] : null);
         if (!name || name.trim().length < 2) continue;
@@ -298,19 +353,25 @@ async function searchPlacesNominatim(
         const dist = calculateDistanceKm(lat, lng, itemLat, itemLng);
 
         // Category determination
-        let matchedCat = BUSINESS_CATEGORIES[0];
+        let matchedCat: CategoryDefinition =
+          BUSINESS_CATEGORIES.find((c) => c.key === 'outros') || BUSINESS_CATEGORIES[BUSINESS_CATEGORIES.length - 1];
         if (categoryKey && categoryKey !== 'todos') {
           const found = BUSINESS_CATEGORIES.find((c) => c.key === categoryKey);
           if (found) matchedCat = found;
         } else {
+          // Category = the segment whose search term found this place
+          const kw = foundByKeyword.toLowerCase();
           for (const [catK, keys] of Object.entries(BROAD_COMMERCIAL_TERMS)) {
-            if (keys.some((k) => normalizedName.includes(k) || (item.type && item.type.includes(k)))) {
+            if (keys.some((k) => k.toLowerCase() === kw)) {
               const f = BUSINESS_CATEGORIES.find((c) => c.key === catK);
               if (f) {
                 matchedCat = f;
                 break;
               }
             }
+          }
+          if (kw === 'restaurante' || kw === 'churrascaria' || kw === 'lanchonete' || kw === 'cafeteria' || kw === 'padaria' || kw === 'bar' || kw === 'sorveteria') {
+            matchedCat = BUSINESS_CATEGORIES.find((c) => c.key === 'restaurante') || matchedCat;
           }
         }
 
@@ -395,6 +456,8 @@ async function searchPlacesOverpassEngine(
   `;
 
   const mirrors = [
+    'https://overpass.openstreetmap.fr/api/interpreter',
+    'https://z.overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
     'https://overpass-api.de/api/interpreter',
   ];
@@ -557,10 +620,10 @@ async function searchPlacesGoogle(
 // Applies deep website verification to confirm whether each business has an own website or NOT
 async function enrichWithDeepWebsiteVerification(businesses: Business[]): Promise<Business[]> {
   // Check up to top 20 businesses in parallel batches of 5
-  const toCheck = businesses.slice(0, 20);
-  const remaining = businesses.slice(20);
+  const toCheck = businesses.slice(0, 60);
+  const remaining = businesses.slice(60);
 
-  const batchSize = 5;
+  const batchSize = 10;
   const verifiedBatch: Business[] = [];
 
   for (let i = 0; i < toCheck.length; i += batchSize) {
@@ -583,23 +646,31 @@ async function enrichWithDeepWebsiteVerification(businesses: Business[]): Promis
 
       // If no website or only social, perform deep Google/web check
       const deepCheck = await verifyBusinessWebsiteDeep(biz.name, biz.city || biz.neighborhood);
+      const noSiteStatus = (biz.instagram || biz.facebook ? 'social_only' : 'none') as WebsiteStatus;
       if (deepCheck.hasWebsite && deepCheck.url) {
         return {
           ...biz,
           websiteStatus: 'own_website' as WebsiteStatus,
           websiteUrl: deepCheck.url,
           opportunityScore: 'low' as OpportunityLevel,
-          opportunityReason: 'Empresa já possui website próprio ativo encontrado na web.',
-        };
-      } else {
-        return {
-          ...biz,
-          websiteStatus: (biz.instagram || biz.whatsapp ? 'social_only' : 'none') as WebsiteStatus,
-          websiteUrl: undefined,
-          opportunityScore: 'high' as OpportunityLevel,
-          opportunityReason: 'Verificado na Web: NÃO possui site próprio. Máximo potencial para venda de landing page!',
+          opportunityReason: `Já possui site próprio encontrado na web: ${deepCheck.url}`,
         };
       }
+      if (deepCheck.checked) {
+        return {
+          ...biz,
+          websiteStatus: noSiteStatus,
+          websiteUrl: undefined,
+          opportunityScore: 'high' as OpportunityLevel,
+          opportunityReason: 'Verificado na web: NÃO possui site próprio (apenas redes/guias). Ótima oportunidade para landing page!',
+        };
+      }
+      // Search engine could not confirm: keep what the map data says, flagged as not confirmed
+      return {
+        ...biz,
+        websiteStatus: biz.websiteStatus === 'none' || biz.websiteStatus === 'social_only' ? biz.websiteStatus : ('unconfirmed' as WebsiteStatus),
+        opportunityReason: biz.opportunityReason || 'Sem site nos dados do mapa (não foi possível confirmar na web).',
+      };
     });
 
     const resolved = await Promise.all(chunkPromises);
@@ -609,6 +680,145 @@ async function enrichWithDeepWebsiteVerification(businesses: Business[]): Promis
   return [...verifiedBatch, ...remaining];
 }
 
+// 2b. Generic Overpass: EVERY named commercial POI (shop/amenity/office/craft/leisure) around the point
+async function searchPlacesOverpassGeneric(
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  categoryKey?: string
+): Promise<Business[]> {
+  const deltaLat = Math.min(Math.max(radiusKm, 1), 15) / 111;
+  const deltaLng = deltaLat / Math.max(0.1, Math.cos((lat * Math.PI) / 180));
+  const south = lat - deltaLat;
+  const north = lat + deltaLat;
+  const west = lng - deltaLng;
+  const east = lng + deltaLng;
+  const bbox = `[bbox:${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}]`;
+
+  const amenities =
+    'restaurant|cafe|fast_food|bar|pub|ice_cream|food_court|dentist|clinic|doctors|veterinary|pharmacy|car_wash|car_rental|driving_school|language_school|music_school|nightclub|studio|coworking_space|bank';
+
+  const overpassQuery = `
+    [out:json][timeout:15]${bbox};
+    (
+      nwr["shop"]["name"];
+      nwr["amenity"~"^(${amenities})$"]["name"];
+      nwr["office"]["name"];
+      nwr["craft"]["name"];
+      nwr["leisure"~"^(fitness_centre|sports_centre|dance)$"]["name"];
+      nwr["healthcare"]["name"];
+    );
+    out center 400;
+  `;
+
+  const mirrors = [
+    'https://overpass.openstreetmap.fr/api/interpreter',
+    'https://z.overpass-api.de/api/interpreter',
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+  ];
+
+  const fallbackCat =
+    BUSINESS_CATEGORIES.find((c) => c.key === 'outros') || BUSINESS_CATEGORIES[BUSINESS_CATEGORIES.length - 1];
+
+  const runMirror = async (mirror: string): Promise<Business[]> => {
+  for (const _once of [0]) {
+    try {
+      const res = await fetch(mirror, {
+        method: 'POST',
+        body: new URLSearchParams({ data: overpassQuery }).toString(),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'LeadCraftAI/2.0 (ncamposdalastra@gmail.com)',
+        },
+        signal: AbortSignal.timeout(18000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const elements = Array.isArray(data.elements) ? data.elements : [];
+      if (elements.length === 0) continue;
+
+      const out: Business[] = [];
+      for (const el of elements) {
+        const tags = el.tags || {};
+        const name = tags.name || tags['name:pt'] || tags.brand;
+        if (!name) continue;
+        const itemLat = el.lat || el.center?.lat;
+        const itemLng = el.lon || el.center?.lon;
+        if (!itemLat || !itemLng) continue;
+
+        let matched: CategoryDefinition = fallbackCat;
+        for (const cat of BUSINESS_CATEGORIES) {
+          if (cat.osmTags.some((t) => t.values.includes(tags[t.key]))) {
+            matched = cat;
+            break;
+          }
+        }
+        if (categoryKey && categoryKey !== 'todos' && matched.key !== categoryKey) continue;
+
+        let rawWebsite = tags.website || tags['contact:website'] || tags.url;
+        let rawInstagram = tags['contact:instagram'] || tags.instagram;
+        let rawFacebook = tags['contact:facebook'] || tags.facebook;
+        if (rawWebsite && isAggregatorOrSocial(rawWebsite)) {
+          if (rawWebsite.includes('instagram.com') && !rawInstagram) rawInstagram = rawWebsite;
+          if (rawWebsite.includes('facebook.com') && !rawFacebook) rawFacebook = rawWebsite;
+          rawWebsite = undefined;
+        }
+        const rawPhone = tags.phone || tags['contact:phone'] || tags['contact:mobile'];
+        const street = tags['addr:street']
+          ? `${tags['addr:street']}${tags['addr:housenumber'] ? ', ' + tags['addr:housenumber'] : ''}`
+          : '';
+        const suburb = tags['addr:suburb'] || tags['addr:neighbourhood'] || '';
+        const city = tags['addr:city'] || '';
+
+        out.push(
+          analyzeOpportunity({
+            id: `osm-${el.type || 'node'}-${el.id}`,
+            name: String(name).trim(),
+            category: matched.name,
+            categoryKey: matched.key,
+            address: [street, suburb, city].filter(Boolean).join(' - ') || 'Endereço não informado no mapa',
+            neighborhood: suburb || undefined,
+            city: city || undefined,
+            lat: itemLat,
+            lng: itemLng,
+            distanceKm: calculateDistanceKm(lat, lng, itemLat, itemLng),
+            phone: rawPhone,
+            whatsapp: tags['contact:whatsapp'] || tags.whatsapp || rawPhone,
+            instagram: rawInstagram,
+            facebook: rawFacebook,
+            rawWebsite,
+            openingHours: tags.opening_hours ? [tags.opening_hours] : undefined,
+          })
+        );
+      }
+      if (out.length > 0) return out;
+    } catch {
+      // mirror failed
+    }
+  }
+  return [];
+  };
+
+  // Race all mirrors in parallel: first one that answers with data wins
+  return new Promise<Business[]>((resolve) => {
+    let pending = mirrors.length;
+    const done = () => {
+      pending -= 1;
+      if (pending === 0) resolve([]);
+    };
+    mirrors.forEach((m) =>
+      runMirror(m)
+        .then((r) => (r.length > 0 ? resolve(r) : done()))
+        .catch(done)
+    );
+  });
+}
+
+// Short-lived cache: avoids hammering public OSM services on repeated identical searches
+const SEARCH_CACHE = new Map<string, { at: number; data: Business[] }>();
+
 // Main Discovery Function: 100% Real Live Places with Deep Website Verification
 export async function searchPlacesOverpass(
   lat: number,
@@ -617,49 +827,42 @@ export async function searchPlacesOverpass(
   categoryKey?: string,
   streetQuery?: string
 ): Promise<Business[]> {
-  let rawBusinesses: Business[] = [];
-
-  // Strategy 1: Google Places if key configured
-  const googleResults = await searchPlacesGoogle(lat, lng, radiusKm, categoryKey);
-  if (googleResults.length > 0) {
-    rawBusinesses = googleResults;
+  const cacheKey = `${lat.toFixed(3)}|${lng.toFixed(3)}|${radiusKm}|${categoryKey || 'todos'}|${(streetQuery || '').toLowerCase()}`;
+  const cached = SEARCH_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.at < 10 * 60 * 1000) {
+    return cached.data;
   }
 
-  // Strategy 2: Fast live Nominatim POI search with bounded viewbox + street support
-  if (rawBusinesses.length < 5) {
-    const nominatimResults = await searchPlacesNominatim(lat, lng, radiusKm, categoryKey, streetQuery);
-    if (nominatimResults.length > 0) {
-      // Merge unique
-      const ids = new Set(rawBusinesses.map((b) => b.name.toLowerCase()));
-      for (const n of nominatimResults) {
-        if (!ids.has(n.name.toLowerCase())) {
-          rawBusinesses.push(n);
-          ids.add(n.name.toLowerCase());
-        }
-      }
+  // Run ALL sources in parallel and merge: we want every establishment around the user
+  const [googleResults, nominatimResults, overpassGeneric, overpassTagged] = await Promise.all([
+    searchPlacesGoogle(lat, lng, radiusKm, categoryKey).catch(() => [] as Business[]),
+    searchPlacesNominatim(lat, lng, radiusKm, categoryKey, streetQuery).catch(() => [] as Business[]),
+    searchPlacesOverpassGeneric(lat, lng, radiusKm, categoryKey).catch(() => [] as Business[]),
+    searchPlacesOverpassEngine(lat, lng, radiusKm, categoryKey).catch(() => [] as Business[]),
+  ]);
+
+  const rawBusinesses: Business[] = [];
+  const seen: Business[] = [];
+  const norm = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
+  // Priority: sources with richer data first
+  for (const source of [googleResults, overpassTagged, overpassGeneric, nominatimResults]) {
+    for (const b of source) {
+      const key = norm(b.name);
+      const dup = seen.some(
+        (s) => norm(s.name) === key && calculateDistanceKm(s.lat, s.lng, b.lat, b.lng) < 0.3
+      );
+      if (dup) continue;
+      seen.push(b);
+      rawBusinesses.push(b);
     }
   }
 
-  // Strategy 3: Overpass multi-mirrors
-  if (rawBusinesses.length < 5) {
-    const overpassResults = await searchPlacesOverpassEngine(lat, lng, radiusKm, categoryKey);
-    if (overpassResults.length > 0) {
-      const ids = new Set(rawBusinesses.map((b) => b.name.toLowerCase()));
-      for (const o of overpassResults) {
-        if (!ids.has(o.name.toLowerCase())) {
-          rawBusinesses.push(o);
-          ids.add(o.name.toLowerCase());
-        }
-      }
-    }
-  }
-
-  // Strategy 4: If strictly no POIs found in a tiny radius, expand radius slightly (up to 12km)
+  // If strictly nothing found in a tiny radius, expand slightly (up to 12km)
   if (rawBusinesses.length === 0 && radiusKm < 12) {
-    const expandedNominatim = await searchPlacesNominatim(lat, lng, 12, categoryKey, streetQuery);
-    if (expandedNominatim.length > 0) {
-      rawBusinesses = expandedNominatim;
-    }
+    const expanded = await searchPlacesNominatim(lat, lng, 12, categoryKey, streetQuery);
+    rawBusinesses.push(...expanded);
   }
 
   if (rawBusinesses.length === 0) {
@@ -670,7 +873,9 @@ export async function searchPlacesOverpass(
   const verifiedBusinesses = await enrichWithDeepWebsiteVerification(rawBusinesses);
 
   // Sort businesses: NO WEBSITE ALWAYS FIRST!
-  return sortBusinesses(verifiedBusinesses);
+  const finalList = sortBusinesses(verifiedBusinesses);
+  SEARCH_CACHE.set(cacheKey, { at: Date.now(), data: finalList });
+  return finalList;
 }
 
 export function sortBusinesses(businesses: Business[]): Business[] {
@@ -690,3 +895,7 @@ export function sortBusinesses(businesses: Business[]): Business[] {
     return (a.distanceKm || 0) - (b.distanceKm || 0);
   });
 }
+
+
+
+

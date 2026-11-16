@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
@@ -42,7 +42,7 @@ export default function DescobertaPage() {
   const [radiusKm, setRadiusKm] = useState<number>(5);
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
   const [filterOpportunity, setFilterOpportunity] = useState<string>('todos');
-  const [filterNoWebsite, setFilterNoWebsite] = useState<boolean>(true); // Ativo por padrão conforme solicitado
+  const [filterNoWebsite, setFilterNoWebsite] = useState<boolean>(false); // Mostra todos; cada card indica se tem site
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -397,11 +397,11 @@ export default function DescobertaPage() {
                 }`}
               >
                 <Flame className={`w-3.5 h-3.5 ${filterNoWebsite ? 'text-emerald-400' : 'text-zinc-500'}`} />
-                <span>Apenas Sem Site Próprio ({countNoWebsite})</span>
+                <span>Só sem site ({countNoWebsite})</span>
               </button>
 
               <span className="text-[11px] text-zinc-500">
-                {filterNoWebsite ? 'Filtrando oportunidades puras' : 'Exibindo todos'}
+                {businesses.length} no total · {countNoWebsite} sem site · {businesses.length - countNoWebsite} com site
               </span>
             </div>
           </div>
@@ -482,3 +482,5 @@ export default function DescobertaPage() {
     </div>
   );
 }
+
+

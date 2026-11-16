@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Business } from '@/types';
 import {
@@ -53,15 +53,15 @@ export default function BusinessCard({
   const websiteBadge = (() => {
     switch (business.websiteStatus) {
       case 'none':
-        return { label: 'Sem site', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+        return { label: '✕ SEM SITE', color: 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' };
       case 'social_only':
-        return { label: 'Apenas Redes Sociais', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
+        return { label: '✕ SEM SITE (só redes sociais)', color: 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' };
       case 'directory_only':
-        return { label: 'Apenas Diretório / Delivery', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
+        return { label: '✕ SEM SITE (só delivery/guia)', color: 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' };
       case 'own_website':
-        return { label: 'Possui Site Próprio', color: 'bg-zinc-800 text-zinc-400 border-zinc-700' };
+        return { label: '✓ TEM SITE', color: 'bg-sky-500/15 text-sky-300 border-sky-500/40 font-bold' };
       default:
-        return { label: 'Não Confirmado', color: 'bg-zinc-800 text-zinc-400 border-zinc-700' };
+        return { label: '? Site não confirmado', color: 'bg-zinc-800 text-zinc-400 border-zinc-700' };
     }
   })();
 
@@ -224,3 +224,4 @@ export default function BusinessCard({
     </div>
   );
 }
+
