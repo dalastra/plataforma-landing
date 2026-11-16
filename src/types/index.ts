@@ -41,6 +41,12 @@ export interface Business {
     hasSocial: boolean;
     hasReviews: boolean;
   };
+  customHeadline?: string;
+  customSubheadline?: string;
+  customSlogan?: string;
+  customServices?: string[];
+  customAboutStory?: string;
+  customDifferentials?: string[];
 }
 
 export type StylePresetId =

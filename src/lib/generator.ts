@@ -333,44 +333,29 @@ export function generateSemanticContent(
     badge = 'Imóveis Selecionados';
   }
 
+  const finalHeadline = business.customHeadline || headline;
+  const finalSubheadline = business.customSubheadline || subheadline;
+  const finalTagline = business.customSlogan || `O melhor em ${business.category.toLowerCase()} na região`;
+
   const { heroPhoto, aboutPhoto, galleryPhotos } = getCuratedPhotosForBusiness(business);
 
-  const serviceItems = business.services.map((svc, idx) => ({
+  const rawServicesList = (business.customServices && business.customServices.length > 0)
+    ? business.customServices
+    : business.services;
+
+  const serviceItems = rawServicesList.map((svc, idx) => ({
     id: `svc-${idx + 1}`,
     title: svc,
-    description: `Procedimento realizado com os mais altos padrões de qualidade, materiais de primeira linha e foco na sua total satisfação.`,
+    description: `Atendimento de excelência com padrões rigorosos de qualidade, materiais de primeira linha e foco na sua total satisfação.`,
     price: cat === 'barbearia' ? (idx === 0 ? 'R$ 60' : idx === 1 ? 'R$ 45' : undefined) : undefined,
   }));
 
-  return {
-    businessName: business.name,
-    tagline: `O melhor em ${business.category.toLowerCase()} na região`,
-    hero: {
-      headline,
-      subheadline,
-      ctaText,
-      ctaWhatsapp: true,
-      badge,
-      backgroundImage: heroPhoto,
-    },
-    about: {
-      title: `Conheça a ${business.name}`,
-      story: `Com dedicação contínua à excelência e ao atendimento humanizado, ${business.name} se destaca pela confiança conquistada junto aos clientes da região. Nosso compromisso é entregar resultados que superem expectativas, em um ambiente confortável e planejado para o seu conforto.`,
-      highlights: [
-        'Atendimento com hora marcada e sem esperas',
-        'Profissionais experientes e altamente capacitados',
-        'Localização de fácil acesso e estacionamento próximo',
-      ],
-      image: aboutPhoto,
-    },
-    services: {
-      title: 'Nossos Serviços e Especialidades',
-      subtitle: `Conheça os principais procedimentos oferecidos por ${business.name}`,
-      items: serviceItems,
-    },
-    differentials: {
-      title: `Por que escolher ${business.name}?`,
-      items: [
+  const rawDiffs = (business.customDifferentials && business.customDifferentials.length > 0)
+    ? business.customDifferentials.map((d, i) => ({
+        title: d.length > 30 ? d.slice(0, 30) + '...' : d,
+        description: d,
+      }))
+    : [
         {
           title: 'Qualidade Garantida',
           description: 'Padrão rigoroso de qualidade em cada detalhe, equipamentos modernos e produtos homologados.',
@@ -383,7 +368,37 @@ export function generateSemanticContent(
           title: 'Agendamento Direto no WhatsApp',
           description: 'Facilidade total para tirar dúvidas, consultar horários e confirmar seu atendimento em poucos cliques.',
         },
+      ];
+
+  return {
+    businessName: business.name,
+    tagline: finalTagline,
+    hero: {
+      headline: finalHeadline,
+      subheadline: finalSubheadline,
+      ctaText,
+      ctaWhatsapp: true,
+      badge,
+      backgroundImage: heroPhoto,
+    },
+    about: {
+      title: `Conheça a ${business.name}`,
+      story: business.customAboutStory || `Com dedicação contínua à excelência e ao atendimento humanizado, ${business.name} se destaca pela confiança conquistada junto aos clientes da região. Nosso compromisso é entregar resultados que superem expectativas, em um ambiente confortável e planejado para o seu conforto.`,
+      highlights: [
+        'Atendimento com hora marcada e sem esperas',
+        'Profissionais experientes e altamente capacitados',
+        'Localização de fácil acesso e estacionamento próximo',
       ],
+      image: aboutPhoto,
+    },
+    services: {
+      title: 'Nossos Serviços e Especialidades',
+      subtitle: `Conheça os principais serviços e produtos oferecidos por ${business.name}`,
+      items: serviceItems,
+    },
+    differentials: {
+      title: `Por que escolher ${business.name}?`,
+      items: rawDiffs,
     },
     testimonials: {
       title: 'Avaliações de Quem Já Conhece',
