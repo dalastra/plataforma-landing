@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Business, LandingPageProject, LandingPageStyle, StylePresetId } from '@/types';
 import { STYLE_PRESETS } from '@/lib/constants';
 import { Sparkles, MapPin, Phone, Building2, Tag, Clock, FileText, CheckCircle2, X, Loader2 } from 'lucide-react';
@@ -44,8 +44,6 @@ export default function CreateSiteModal({
   initialData,
   onSuccess,
 }: CreateSiteModalProps) {
-  if (!isOpen) return null;
-
   const [name, setName] = useState(initialData.name || '');
   const [categoryKey, setCategoryKey] = useState(initialData.categoryKey || 'pizzaria');
   const [address, setAddress] = useState(initialData.address || '');
@@ -57,6 +55,17 @@ export default function CreateSiteModal({
   const [selectedStyleId, setSelectedStyleId] = useState<StylePresetId>('modern-minimalist');
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setName(initialData.name || '');
+      setCategoryKey(initialData.categoryKey || 'pizzaria');
+      setAddress(initialData.address || '');
+      setWhatsapp(initialData.whatsapp || initialData.phone || '');
+    }
+  }, [isOpen, initialData]);
+
+  if (!isOpen) return null;
 
   const currentCategoryObj = CATEGORY_OPTIONS.find((c) => c.key === categoryKey) || CATEGORY_OPTIONS[0];
 

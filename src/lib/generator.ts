@@ -351,7 +351,7 @@ export function generateSemanticContent(
   }));
 
   const rawDiffs = (business.customDifferentials && business.customDifferentials.length > 0)
-    ? business.customDifferentials.map((d, i) => ({
+    ? business.customDifferentials.map((d) => ({
         title: d.length > 30 ? d.slice(0, 30) + '...' : d,
         description: d,
       }))
