@@ -283,7 +283,7 @@ IMPORTANTE:
 
 export function generateSemanticContent(
   business: Business,
-  style: LandingPageStyle
+  _style?: LandingPageStyle
 ): LandingPageContent {
   const cat = business.categoryKey;
   let headline = `Excelência e Cuidado em ${business.category}`;
@@ -426,7 +426,7 @@ export function generateSemanticContent(
 export function renderStandaloneHtml(
   content: LandingPageContent,
   style: LandingPageStyle,
-  business: Business
+  _business?: Business
 ): string {
   const cleanPhone = (content.whatsappNumber || '').replace(/\D/g, '');
   const waLink = cleanPhone

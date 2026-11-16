@@ -8,6 +8,10 @@ export async function POST(req: Request) {
       data: { user },
     } = await supabase.auth.getUser();
 
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 });
+    }
+
     const body = await req.json();
     const token = body.token?.trim();
 

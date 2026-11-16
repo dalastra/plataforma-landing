@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getProjectById, updateProject } from '@/lib/db';
+import { getProjectById, updateProject, getUserSettings } from '@/lib/db';
 
 export async function POST(req: Request) {
   try {
@@ -24,15 +24,10 @@ export async function POST(req: Request) {
     let teamId = body.teamId?.trim();
 
     if (!token && user) {
-      const { data: dbSettings } = await supabase
-        .from('user_settings')
-        .select('platform_settings')
-        .eq('user_id', user.id)
-        .single();
-
-      if (dbSettings?.platform_settings?.vercelAccessToken) {
-        token = dbSettings.platform_settings.vercelAccessToken;
-        teamId = dbSettings.platform_settings.vercelTeamId;
+      const userSettings = await getUserSettings(user.id);
+      if (userSettings.vercelAccessToken) {
+        token = userSettings.vercelAccessToken;
+        teamId = userSettings.vercelTeamId;
       }
     }
 

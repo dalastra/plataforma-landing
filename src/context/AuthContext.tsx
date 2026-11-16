@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -38,9 +38,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  async function fetchProfile(userId: string) {
+  const fetchProfile = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -57,17 +57,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const newProfile = {
             id: userData.user.id,
             full_name: userData.user.user_metadata?.full_name || userData.user.email?.split('@')[0] || 'Usuário',
-            email: userData.user.email,
+            email: userData.user.email || null,
             avatar_url: userData.user.user_metadata?.avatar_url || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           };
           await supabase.from('profiles').insert(newProfile);
-          setProfile(newProfile as any);
+          setProfile(newProfile);
         }
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
     }
-  }
+  }, [supabase]);
 
   useEffect(() => {
     async function initAuth() {
@@ -115,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     initAuth();
-  }, [router, supabase]);
+  }, [router, supabase, fetchProfile]);
 
   async function signOut() {
     await supabase.auth.signOut();

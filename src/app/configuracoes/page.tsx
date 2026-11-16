@@ -36,10 +36,6 @@ export default function ConfiguracoesPage() {
   const [testingVercel, setTestingVercel] = useState(false);
   const [vercelStatus, setVercelStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
   async function loadSettings() {
     try {
       setLoading(true);
@@ -54,6 +50,10 @@ export default function ConfiguracoesPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
 
   async function handleSaveSettings(e?: React.FormEvent) {
     if (e) e.preventDefault();

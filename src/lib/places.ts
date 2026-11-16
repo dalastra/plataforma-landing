@@ -723,7 +723,6 @@ async function searchPlacesOverpassGeneric(
     BUSINESS_CATEGORIES.find((c) => c.key === 'outros') || BUSINESS_CATEGORIES[BUSINESS_CATEGORIES.length - 1];
 
   const runMirror = async (mirror: string): Promise<Business[]> => {
-  for (const _once of [0]) {
     try {
       const res = await fetch(mirror, {
         method: 'POST',
@@ -734,10 +733,10 @@ async function searchPlacesOverpassGeneric(
         },
         signal: AbortSignal.timeout(18000),
       });
-      if (!res.ok) continue;
+      if (!res.ok) return [];
       const data = await res.json();
       const elements = Array.isArray(data.elements) ? data.elements : [];
-      if (elements.length === 0) continue;
+      if (elements.length === 0) return [];
 
       const out: Business[] = [];
       for (const el of elements) {
@@ -797,8 +796,7 @@ async function searchPlacesOverpassGeneric(
     } catch {
       // mirror failed
     }
-  }
-  return [];
+    return [];
   };
 
   // Race all mirrors in parallel: first one that answers with data wins

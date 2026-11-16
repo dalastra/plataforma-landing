@@ -10,8 +10,23 @@ export async function POST(req: Request) {
     }
 
     const supabase = await createClient();
+    const userAgent = req.headers.get('user-agent') || 'unknown';
 
-    // 1. Fetch project to see current views & business
+    // 1. Try secure Postgres RPC function (handles RLS bypass safely for view counts)
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('record_demo_view', {
+      p_project_id: projectId,
+      p_user_agent: userAgent,
+    });
+
+    if (!rpcErr && rpcData?.success) {
+      return NextResponse.json({
+        success: true,
+        viewsCount: rpcData.viewsCount,
+        lastViewedAt: rpcData.lastViewedAt,
+      });
+    }
+
+    // 2. Fallback direct update for authenticated user owner
     const { data: project, error: projErr } = await supabase
       .from('landing_pages')
       .select('id, user_id, business_id, demo_views_count')
@@ -25,7 +40,6 @@ export async function POST(req: Request) {
     const newViewsCount = (project.demo_views_count || 0) + 1;
     const now = new Date().toISOString();
 
-    // 2. Update landing_pages
     await supabase
       .from('landing_pages')
       .update({
@@ -34,15 +48,13 @@ export async function POST(req: Request) {
       })
       .eq('id', projectId);
 
-    // 3. Log event into demo_views
     await supabase.from('demo_views').insert({
       landing_page_id: projectId,
       business_id: project.business_id,
-      user_agent: req.headers.get('user-agent') || 'unknown',
+      user_agent: userAgent,
       viewed_at: now,
     });
 
-    // 4. Update corresponding lead if exists
     if (project.business_id && project.user_id) {
       const { data: lead } = await supabase
         .from('leads')
@@ -52,13 +64,12 @@ export async function POST(req: Request) {
         .single();
 
       if (lead) {
-        const leadUpdates: any = {
+        const leadUpdates: Record<string, unknown> = {
           demo_views_count: (lead.demo_views_count || 0) + 1,
           last_demo_viewed_at: now,
           updated_at: now,
         };
 
-        // Advance to demo_viewed if previous status was new, analyzed, or contacted
         if (
           lead.status === 'new' ||
           lead.status === 'analyzed' ||
@@ -80,7 +91,9 @@ export async function POST(req: Request) {
       viewsCount: newViewsCount,
       lastViewedAt: now,
     });
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
+

@@ -20,8 +20,8 @@ export default function PerfilPage() {
   const { user, profile, signOut, refreshProfile } = useAuth();
   const supabase = createClient();
 
-  const [fullName, setFullName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [fullName, setFullName] = useState(profile?.full_name || '');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url || null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -38,8 +38,11 @@ export default function PerfilPage() {
 
   useEffect(() => {
     if (profile) {
-      setFullName(profile.full_name || '');
-      setAvatarUrl(profile.avatar_url || null);
+      const timer = setTimeout(() => {
+        setFullName(profile.full_name || '');
+        setAvatarUrl(profile.avatar_url || null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [profile]);
 

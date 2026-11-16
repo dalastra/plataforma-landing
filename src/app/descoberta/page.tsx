@@ -140,7 +140,10 @@ export default function DescobertaPage() {
 
   // Initial load
   useEffect(() => {
-    handleSearch();
+    const timer = setTimeout(() => {
+      handleSearch();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [radiusKm, selectedCategory]);
 
   // Request browser GPS position
@@ -192,6 +195,15 @@ export default function DescobertaPage() {
     }
   }
 
+  // Filtered list
+  const filteredBusinesses = businesses.filter((b) => {
+    if (filterOpportunity !== 'todos' && b.opportunityScore !== filterOpportunity) return false;
+    if (filterNoWebsite && b.websiteStatus === 'own_website') return false;
+    return true;
+  });
+
+  const countNoWebsite = businesses.filter((b) => b.websiteStatus !== 'own_website').length;
+
   function handleExportDiscoveredCsv() {
     if (filteredBusinesses.length === 0) return;
     const headers = ['Nome', 'Categoria', 'Oportunidade', 'Telefone', 'WhatsApp', 'Tipo Telefone', 'Endereco', 'Possui Site?', 'Instagram', 'Avaliacao'];
@@ -212,19 +224,11 @@ export default function DescobertaPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `estabelecimentos-sem-site-${Date.now()}.csv`;
+    const fileTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.download = `estabelecimentos-sem-site-${fileTimestamp}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
-
-  // Filtered list
-  const filteredBusinesses = businesses.filter((b) => {
-    if (filterOpportunity !== 'todos' && b.opportunityScore !== filterOpportunity) return false;
-    if (filterNoWebsite && b.websiteStatus === 'own_website') return false;
-    return true;
-  });
-
-  const countNoWebsite = businesses.filter((b) => b.websiteStatus !== 'own_website').length;
 
   return (
     <div className="p-4 md:p-6 max-w-[1600px] mx-auto w-full space-y-5">

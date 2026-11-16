@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getProjectById, updateProject } from '@/lib/db';
+import { getProjectById, updateProject, getUserSettings } from '@/lib/db';
 
 export async function POST(req: Request) {
   try {
@@ -28,13 +28,8 @@ export async function POST(req: Request) {
     }
 
     // Get user's Vercel token
-    const { data: dbSettings } = await supabase
-      .from('user_settings')
-      .select('vercel_access_token, vercel_team_id')
-      .eq('user_id', user.id)
-      .single();
-
-    const token = dbSettings?.vercel_access_token;
+    const userSettings = await getUserSettings(user.id);
+    const token = userSettings.vercelAccessToken;
     if (!token) {
       return NextResponse.json(
         { success: false, error: 'Conecte sua conta Vercel em Configurações para vincular domínios.' },
@@ -45,13 +40,13 @@ export async function POST(req: Request) {
     const cleanDomain = domainName.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
 
     // Extract vercel project name from vercelUrl if available, or generate from business name
-    let vercelProjectName = project.vercelUrl
+    const vercelProjectName = project.vercelUrl
       ? new URL(project.vercelUrl).hostname.split('.')[0]
       : `lp-${project.businessName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
 
     const url = new URL(`https://api.vercel.com/v10/projects/${vercelProjectName}/domains`);
-    if (dbSettings.vercel_team_id) {
-      url.searchParams.set('teamId', dbSettings.vercel_team_id);
+    if (userSettings.vercelTeamId) {
+      url.searchParams.set('teamId', userSettings.vercelTeamId);
     }
 
     const vercelRes = await fetch(url.toString(), {

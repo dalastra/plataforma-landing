@@ -8,7 +8,8 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    let { lat, lng, radiusKm = 5, categoryKey = 'todos', query } = body;
+    const { radiusKm = 5, categoryKey = 'todos', query } = body;
+    let { lat, lng } = body;
 
     let geocodeResult = null;
 

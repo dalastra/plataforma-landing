@@ -28,10 +28,6 @@ export default function ProjetosPage() {
   const [activeProject, setActiveProject] = useState<LandingPageProject | null>(null);
   const [activeBusiness, setActiveBusiness] = useState<any>(null);
 
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
   async function loadProjects() {
     try {
       setLoading(true);
@@ -46,6 +42,10 @@ export default function ProjetosPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
 
   async function handleDeleteProject(id: string) {
     if (!confirm('Deseja realmente excluir este projeto de landing page?')) return;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Business, LandingPageStyle, StylePresetId } from '@/types';
 import { STYLE_PRESETS, BUSINESS_CATEGORIES } from '@/lib/constants';
@@ -24,17 +24,19 @@ interface StyleSelectorModalProps {
   isGenerating?: boolean;
 }
 
+const emptySubscribe = () => () => {};
+
 export default function StyleSelectorModal({
   business,
   onClose,
   onConfirmGenerate,
   isGenerating = false,
 }: StyleSelectorModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
     if (!business) return;

@@ -56,10 +56,6 @@ export default function LeadsPage() {
   const [activeProject, setActiveProject] = useState<LandingPageProject | null>(null);
   const [activeBusiness, setActiveBusiness] = useState<any>(null);
 
-  useEffect(() => {
-    loadLeadsAndProjects();
-  }, []);
-
   async function loadLeadsAndProjects() {
     try {
       setLoading(true);
@@ -78,6 +74,10 @@ export default function LeadsPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    loadLeadsAndProjects();
+  }, []);
 
   async function handleStatusChange(leadId: string, newStatus: LeadStatus) {
     try {

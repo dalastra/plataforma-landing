@@ -140,6 +140,7 @@ export function analyzeOpportunity(input: RawPlaceInput): Business {
   const hasDigitalPresence = hasInstagram || hasFacebook || websiteStatus === 'directory_only';
   const hasGoodRating = (input.rating || 0) >= 4.0;
   const hasManyReviews = (input.reviewCount || 0) >= 20;
+  const hasGoodReputation = hasGoodRating && hasManyReviews;
 
   // High conversion categories for local landing pages
   const highConversionCategories = [
@@ -185,6 +186,10 @@ export function analyzeOpportunity(input: RawPlaceInput): Business {
     } else {
       opportunityReason =
         `Negócio local com forte apelo visual e comercial no segmento de ${input.category}. Não possui site próprio identificado, mas tem contato direto estabelecido. Uma landing page com catálogo de serviços e botão WhatsApp é perfeita para fechar vendas.`;
+    }
+
+    if (hasGoodReputation) {
+      opportunityReason += ' Conta com excelente avaliação e volume expressivo de avaliações dos clientes, ampliando a taxa de conversão do pitch.';
     }
   }
   // 3. Medium Opportunity condition:

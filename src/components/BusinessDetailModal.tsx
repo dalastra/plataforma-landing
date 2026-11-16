@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Business } from '@/types';
 import {
@@ -41,16 +41,18 @@ interface BusinessDetailModalProps {
   onGenerateLandingPage: (business: Business) => void;
 }
 
+const emptySubscribe = () => () => {};
+
 export default function BusinessDetailModal({
   business,
   onClose,
   onGenerateLandingPage,
 }: BusinessDetailModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   useEffect(() => {
     if (!business) return;

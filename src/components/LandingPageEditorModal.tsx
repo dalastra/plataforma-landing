@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { LandingPageProject, Business, CommercialPitch } from '@/types';
 import { generateCommercialPitches } from '@/lib/pitch';
@@ -30,12 +30,14 @@ interface LandingPageEditorModalProps {
   onUpdateProject: (updated: LandingPageProject) => void;
 }
 
-export default function LandingPageEditorModal(props: LandingPageEditorModalProps) {
-  const [mounted, setMounted] = useState(false);
+const emptySubscribe = () => () => {};
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+export default function LandingPageEditorModal(props: LandingPageEditorModalProps) {
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   if (!props.project || !mounted) return null;
 
