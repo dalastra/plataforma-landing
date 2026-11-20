@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { LandingPageProject, Business, CommercialPitch } from '@/types';
 import { generateCommercialPitches } from '@/lib/pitch';
 import { renderStandaloneHtml } from '@/lib/generator';
+import { useToast } from '@/context/ToastContext';
 import {
   X,
   Smartphone,
@@ -63,6 +64,8 @@ function LandingPageEditorInner({
   onClose: () => void;
   onUpdateProject: (updated: LandingPageProject) => void;
 }) {
+  const { success: toastSuccess, error: toastError } = useToast();
+
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -116,6 +119,7 @@ function LandingPageEditorInner({
       updatedAt: new Date().toISOString(),
     };
     onUpdateProject(updated);
+    toastSuccess('Alterações salvas com sucesso!');
   }
 
   function handleCopy(text: string, isPitch = false) {
@@ -123,9 +127,11 @@ function LandingPageEditorInner({
     if (isPitch) {
       setCopiedPitch(true);
       setTimeout(() => setCopiedPitch(false), 2000);
+      toastSuccess('Mensagem de abordagem copiada!');
     } else {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+      toastSuccess('Link da demonstração copiado!');
     }
   }
 
@@ -539,6 +545,39 @@ function LandingPageEditorInner({
                       />
                     </div>
                   </div>
+
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1 flex items-center justify-between">
+                      <span>Imagem de Fundo do Hero (URL)</span>
+                      {content.hero.backgroundImage && (
+                        <span className="text-[10px] text-blue-400">Prévia ativa</span>
+                      )}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="url"
+                        placeholder="https://images.unsplash.com/... ou link de foto real"
+                        value={content.hero.backgroundImage || ''}
+                        onChange={(e) =>
+                          setContent({
+                            ...content,
+                            hero: { ...content.hero, backgroundImage: e.target.value },
+                          })
+                        }
+                        className="flex-1 text-xs bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 text-zinc-100 placeholder:text-zinc-600"
+                      />
+                      {content.hero.backgroundImage && (
+                        <div className="w-9 h-9 rounded-lg border border-zinc-700 overflow-hidden shrink-0 bg-zinc-800 shadow">
+                          <img
+                            src={content.hero.backgroundImage}
+                            alt="Hero"
+                            className="w-full h-full object-cover"
+                            onError={(e: any) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* About Section Editing */}
@@ -572,6 +611,60 @@ function LandingPageEditorInner({
                         })
                       }
                       className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 text-zinc-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1 flex items-center justify-between">
+                      <span>Foto da Seção Sobre (URL)</span>
+                      {content.about.image && (
+                        <span className="text-[10px] text-blue-400">Prévia ativa</span>
+                      )}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="url"
+                        placeholder="https://images.unsplash.com/... ou link de foto real"
+                        value={content.about.image || ''}
+                        onChange={(e) =>
+                          setContent({
+                            ...content,
+                            about: { ...content.about, image: e.target.value },
+                          })
+                        }
+                        className="flex-1 text-xs bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 text-zinc-100 placeholder:text-zinc-600"
+                      />
+                      {content.about.image && (
+                        <div className="w-9 h-9 rounded-lg border border-zinc-700 overflow-hidden shrink-0 bg-zinc-800 shadow">
+                          <img
+                            src={content.about.image}
+                            alt="Sobre"
+                            className="w-full h-full object-cover"
+                            onError={(e: any) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location & Contacts */}
+                <div className="space-y-3 pt-4 border-t border-zinc-800/80">
+                  <div className="text-xs font-bold uppercase tracking-wider text-blue-400">
+                    Contatos & WhatsApp
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">WhatsApp de Atendimento (com DDD)</label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 11999998888"
+                      value={content.whatsappNumber || ''}
+                      onChange={(e) =>
+                        setContent({
+                          ...content,
+                          whatsappNumber: e.target.value,
+                        })
+                      }
+                      className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 text-zinc-100 placeholder:text-zinc-600"
                     />
                   </div>
                 </div>

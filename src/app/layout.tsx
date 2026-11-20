@@ -3,6 +3,7 @@ import './globals.css';
 import { Suspense } from 'react';
 import AppShell from '@/components/AppShell';
 import { AuthProvider } from '@/context/AuthContext';
+import { ToastProvider } from '@/context/ToastContext';
 
 export const metadata: Metadata = {
   title: 'LeadCraft AI | Prospecção Inteligente & Landing Pages',
@@ -26,9 +27,11 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-[#09090b] text-[#f4f4f5] antialiased">
         <AuthProvider>
-          <Suspense fallback={<div className="min-h-screen bg-[#09090b]" />}>
-            <AppShell>{children}</AppShell>
-          </Suspense>
+          <ToastProvider>
+            <Suspense fallback={<div className="min-h-screen bg-[#09090b]" />}>
+              <AppShell>{children}</AppShell>
+            </Suspense>
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>

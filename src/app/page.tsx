@@ -20,13 +20,16 @@ import StyleSelectorModal from '@/components/StyleSelectorModal';
 import LandingPageEditorModal from '@/components/LandingPageEditorModal';
 import BusinessDetailModal from '@/components/BusinessDetailModal';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 
 export default function DashboardPage() {
   const { user, profile } = useAuth();
+  const { success, error: toastError } = useToast();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [projects, setProjects] = useState<LandingPageProject[]>([]);
   const [recentOpportunities, setRecentOpportunities] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userCity, setUserCity] = useState<string>('');
 
   // Modals state
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
@@ -39,27 +42,35 @@ export default function DashboardPage() {
       try {
         setLoading(true);
 
-        // Fetch user's real leads and projects
-        const [resLeads, resProjects] = await Promise.all([
+        // Fetch user's real leads, projects and settings
+        const [resLeads, resProjects, resSettings] = await Promise.all([
           fetch('/api/leads'),
           fetch('/api/projects'),
+          fetch('/api/settings').catch(() => null),
         ]);
 
         const dataLeads = await resLeads.json();
         const dataProjects = await resProjects.json();
+        const dataSettings = resSettings ? await resSettings.json() : null;
 
         if (dataLeads.success) setLeads(dataLeads.leads || []);
         if (dataProjects.success) setProjects(dataProjects.projects || []);
 
-        // Fetch local opportunities nearby for discovery preview
-        const resPlaces = await fetch('/api/places/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: 'São Paulo, SP', radiusKm: 5 }),
-        });
-        const dataPlaces = await resPlaces.json();
-        if (dataPlaces.success) {
-          setRecentOpportunities(dataPlaces.businesses.slice(0, 4));
+        const savedCity = dataSettings?.settings?.userCity || '';
+        setUserCity(savedCity);
+
+        // Fetch opportunities only if user has a configured city or leads
+        const targetQuery = savedCity || (dataLeads.leads?.[0]?.business?.city) || '';
+        if (targetQuery) {
+          const resPlaces = await fetch('/api/places/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: targetQuery, radiusKm: 5 }),
+          });
+          const dataPlaces = await resPlaces.json();
+          if (dataPlaces.success) {
+            setRecentOpportunities(dataPlaces.businesses.slice(0, 4));
+          }
         }
       } catch (err) {
         console.error('Failed to load dashboard data:', err);
@@ -89,12 +100,13 @@ export default function DashboardPage() {
 
         setStyleModalBusiness(null);
         setActiveProject(data.project);
+        success('Landing page gerada com sucesso!', data.project.businessName);
       } else {
-        alert(data.error || 'Erro ao gerar landing page');
+        toastError(data.error || 'Erro ao gerar landing page');
       }
     } catch (err) {
       console.error('Generation error:', err);
-      alert('Erro de conexão ao gerar landing page.');
+      toastError('Erro de conexão ao gerar landing page.');
     } finally {
       setIsGenerating(false);
     }
@@ -136,8 +148,8 @@ export default function DashboardPage() {
           href="/descoberta"
           className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm shadow-lg shadow-blue-600/25 transition-all hover:scale-[1.02]"
         >
-          <Compass className="w-4 h-4" />
-          <span>Iniciar Nova Prospecção</span>
+          <MapPin className="w-4 h-4" />
+          <span>Criar Site no Mapa</span>
         </Link>
       </div>
 

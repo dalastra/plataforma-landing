@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Business } from '@/types';
-import { Layers, MapPin } from 'lucide-react';
+import { Layers, MapPin, Maximize2, Minimize2 } from 'lucide-react';
 
 interface MapComponentProps {
   center: { lat: number; lng: number };
@@ -31,6 +31,16 @@ export default function MapComponent({
   const circleRef = useRef<any>(null);
 
   const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'osm'>('roadmap');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  function toggleFullscreen() {
+    setIsFullscreen(!isFullscreen);
+    setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    }, 100);
+  }
 
   // Change tile layer when mapType changes
   useEffect(() => {
@@ -90,7 +100,12 @@ export default function MapComponent({
           center: [center.lat, center.lng],
           zoom: 15,
           zoomControl: true,
+          scrollWheelZoom: false,
         });
+
+        // Enable wheel zoom on focus, disable on blur to protect mobile/page scrolling
+        map.on('focus', () => map.scrollWheelZoom.enable());
+        map.on('blur', () => map.scrollWheelZoom.disable());
 
         // Default Google Maps Roadmap layer
         const gLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
@@ -279,38 +294,54 @@ export default function MapComponent({
   }, [selectedCustomPin]);
 
   return (
-    <div className="relative isolate z-0 w-full h-full min-h-[500px] rounded-xl overflow-hidden border border-zinc-800 shadow-xl">
-      {/* Map Type Switcher (Google Maps / Satellite / OSM) */}
-      <div className="absolute top-3 right-3 z-[1000] bg-zinc-950/90 backdrop-blur-md border border-zinc-700/80 rounded-lg p-1 flex items-center gap-1 shadow-lg">
+    <div
+      className={`relative isolate z-0 w-full overflow-hidden transition-all duration-200 border border-zinc-800 shadow-xl ${
+        isFullscreen
+          ? 'fixed inset-0 z-[99999] h-screen w-screen rounded-none bg-black'
+          : 'h-full min-h-[500px] rounded-xl'
+      }`}
+    >
+      {/* Map Controls (Layer Switcher & Fullscreen Toggle) */}
+      <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
+        <div className="bg-zinc-950/90 backdrop-blur-md border border-zinc-700/80 rounded-lg p-1 flex items-center gap-1 shadow-lg">
+          <button
+            onClick={() => setMapType('roadmap')}
+            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+              mapType === 'roadmap'
+                ? 'bg-blue-600 text-white shadow'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+          >
+            Google Mapa
+          </button>
+          <button
+            onClick={() => setMapType('satellite')}
+            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+              mapType === 'satellite'
+                ? 'bg-blue-600 text-white shadow'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+          >
+            Satélite
+          </button>
+          <button
+            onClick={() => setMapType('osm')}
+            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
+              mapType === 'osm'
+                ? 'bg-blue-600 text-white shadow'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+          >
+            OSM
+          </button>
+        </div>
+
         <button
-          onClick={() => setMapType('roadmap')}
-          className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
-            mapType === 'roadmap'
-              ? 'bg-blue-600 text-white shadow'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-          }`}
+          onClick={toggleFullscreen}
+          className="p-2 rounded-lg bg-zinc-950/90 hover:bg-zinc-900 border border-zinc-700/80 text-zinc-300 hover:text-white shadow-lg backdrop-blur-md transition-colors"
+          title={isFullscreen ? 'Sair da tela cheia' : 'Expandir mapa em tela cheia'}
         >
-          Google Mapa
-        </button>
-        <button
-          onClick={() => setMapType('satellite')}
-          className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
-            mapType === 'satellite'
-              ? 'bg-blue-600 text-white shadow'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-          }`}
-        >
-          Satélite
-        </button>
-        <button
-          onClick={() => setMapType('osm')}
-          className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
-            mapType === 'osm'
-              ? 'bg-blue-600 text-white shadow'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-          }`}
-        >
-          OpenStreetMap
+          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </button>
       </div>
 

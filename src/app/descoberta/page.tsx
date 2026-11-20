@@ -19,6 +19,7 @@ import BusinessCard from '@/components/BusinessCard';
 import BusinessDetailModal from '@/components/BusinessDetailModal';
 import CreateSiteModal from '@/components/CreateSiteModal';
 import LandingPageEditorModal from '@/components/LandingPageEditorModal';
+import { useToast } from '@/context/ToastContext';
 
 // Dynamically import MapComponent to prevent SSR issues with Leaflet
 const MapComponent = dynamic(() => import('@/components/MapComponent'), {
@@ -34,10 +35,16 @@ const MapComponent = dynamic(() => import('@/components/MapComponent'), {
 });
 
 export default function DescobertaPage() {
+  const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
   const [center, setCenter] = useState({ lat: -23.1857, lng: -46.8978 }); // Default to Jundiaí / SP
   const [searchQuery, setSearchQuery] = useState('Rua do Retiro, Jundiaí');
   const [radiusKm, setRadiusKm] = useState<number>(3);
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
+
+  // Autocomplete suggestions
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [autocompleteTimer, setAutocompleteTimer] = useState<any>(null);
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -118,6 +125,42 @@ export default function DescobertaPage() {
     return () => clearTimeout(timer);
   }, [radiusKm, selectedCategory]);
 
+  function handleQueryChange(text: string) {
+    setSearchQuery(text);
+    if (autocompleteTimer) clearTimeout(autocompleteTimer);
+
+    if (text.trim().length >= 2) {
+      const timer = setTimeout(async () => {
+        try {
+          const res = await fetch(
+            `/api/places/autocomplete?q=${encodeURIComponent(text.trim())}&lat=${center.lat}&lng=${center.lng}`
+          );
+          const data = await res.json();
+          if (data.success && Array.isArray(data.suggestions)) {
+            setSuggestions(data.suggestions);
+            setShowSuggestions(data.suggestions.length > 0);
+          }
+        } catch {
+          // ignore autocomplete network hiccups
+        }
+      }, 250);
+      setAutocompleteTimer(timer);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }
+
+  function handleSelectSuggestion(sug: any) {
+    setSearchQuery(sug.label);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    setCenter({ lat: sug.lat, lng: sug.lng });
+    setUserLocationName(sug.label);
+    handleSearch(sug.lat, sug.lng, sug.label);
+    toastInfo(`Navegando para: ${sug.name}`);
+  }
+
   // Handle map click anywhere (reverse geocode & drop pin)
   async function handleMapClick(coords: { lat: number; lng: number }) {
     try {
@@ -141,6 +184,7 @@ export default function DescobertaPage() {
           neighborhood: data.neighborhood,
           city: data.city,
         });
+        toastInfo(`Ponto marcado: ${data.name || 'Local no mapa'}`);
       }
     } catch (err) {
       console.error('Error reverse geocoding:', err);
@@ -193,7 +237,7 @@ export default function DescobertaPage() {
   // Request browser GPS position
   function handleUseCurrentLocation() {
     if (!navigator.geolocation) {
-      alert('Geolocalização não é suportada pelo seu navegador.');
+      toastError('Geolocalização não é suportada pelo seu navegador.');
       return;
     }
 
@@ -206,11 +250,12 @@ export default function DescobertaPage() {
         setSearchQuery('');
         setUserLocationName('Sua localização atual');
         handleSearch(newLat, newLng, '');
+        toastSuccess('Localização detectada com sucesso!');
       },
       (err) => {
         setLoading(false);
         console.warn('Geolocation error:', err);
-        alert('Não foi possível obter a sua localização. Você pode digitar sua cidade, rua ou bairro manualmente.');
+        toastError('Não foi possível obter sua localização. Digite sua rua ou cidade na busca.');
       },
       { timeout: 10000 }
     );
@@ -236,17 +281,47 @@ export default function DescobertaPage() {
       {/* Search Bar & Controls */}
       <div className="p-4 rounded-2xl bg-[#121215] border border-zinc-800 shadow-xl space-y-3">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
-          {/* Text Search Input */}
+          {/* Text Search Input with Autocomplete */}
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              onFocus={() => {
+                if (suggestions.length > 0) setShowSuggestions(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setShowSuggestions(false);
+                  handleSearch();
+                }
+              }}
               placeholder="Buscar endereço, rua, bairro, cidade ou comércio..."
               className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-blue-500"
             />
+
+            {/* Suggestions Dropdown */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1.5 z-[9999] bg-[#121215] border border-zinc-700/80 rounded-xl shadow-2xl overflow-hidden divide-y divide-zinc-800/80 max-h-64 overflow-y-auto">
+                {suggestions.map((sug, i) => (
+                  <button
+                    key={`${sug.lat}-${sug.lng}-${i}`}
+                    type="button"
+                    onClick={() => handleSelectSuggestion(sug)}
+                    className="w-full px-4 py-2.5 text-left hover:bg-zinc-800/80 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 group-hover:bg-blue-500/20">
+                      <MapPin className="w-3 h-3" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-white truncate">{sug.name}</div>
+                      <div className="text-[11px] text-zinc-400 truncate">{sug.label}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Current Location Button */}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Business, LandingPageProject, LandingPageStyle, StylePresetId } from '@/types';
 import { STYLE_PRESETS } from '@/lib/constants';
 import { Sparkles, MapPin, Phone, Building2, Tag, Clock, FileText, CheckCircle2, X, Loader2 } from 'lucide-react';
+import { useToast } from '@/context/ToastContext';
 
 interface CreateSiteModalProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ export default function CreateSiteModal({
   initialData,
   onSuccess,
 }: CreateSiteModalProps) {
+  const { success: toastSuccess, error: toastError } = useToast();
   const [name, setName] = useState(initialData.name || '');
   const [categoryKey, setCategoryKey] = useState(initialData.categoryKey || 'pizzaria');
   const [address, setAddress] = useState(initialData.address || '');
@@ -72,7 +74,7 @@ export default function CreateSiteModal({
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
-      alert('Por favor, informe o nome do negócio.');
+      toastError('Por favor, informe o nome do negócio.');
       return;
     }
 
@@ -146,10 +148,11 @@ export default function CreateSiteModal({
       }
 
       setLoadingStep('Finalizando seu site...');
+      toastSuccess('Landing page gerada com sucesso!', businessPayload.name);
       onSuccess(data.project, businessPayload);
     } catch (err: any) {
       console.error('Error generating page:', err);
-      alert(err.message || 'Erro ao gerar o site. Tente novamente.');
+      toastError(err.message || 'Erro ao gerar o site. Tente novamente.');
     } finally {
       setLoading(false);
     }

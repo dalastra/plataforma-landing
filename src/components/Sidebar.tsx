@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Compass,
+  MapPin,
   Sparkles,
   Users,
   FolderGit2,
@@ -20,9 +21,8 @@ import { useAuth } from '@/context/AuthContext';
 
 const NAV_ITEMS = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Encontrar negócios', href: '/descoberta', icon: Compass },
-  { name: 'Oportunidades', href: '/oportunidades', icon: Sparkles },
-  { name: 'Meus leads', href: '/leads', icon: Users },
+  { name: 'Criar no Mapa', href: '/descoberta', icon: MapPin },
+  { name: 'Meus leads (CRM)', href: '/leads', icon: Users },
   { name: 'Meus projetos', href: '/projetos', icon: FolderGit2 },
   { name: 'Configurações', href: '/configuracoes', icon: Settings },
   { name: 'Meu perfil', href: '/perfil', icon: UserIcon },
