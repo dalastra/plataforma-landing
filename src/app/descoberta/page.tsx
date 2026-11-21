@@ -34,12 +34,31 @@ const MapComponent = dynamic(() => import('@/components/MapComponent'), {
   ),
 });
 
+const CATEGORY_FILTERS = [
+  { key: 'todos', name: 'Todos os Segmentos', icon: '📍' },
+  { key: 'pizzaria', name: 'Pizzarias & Burgers', icon: '🍕' },
+  { key: 'restaurante', name: 'Restaurantes', icon: '🍽️' },
+  { key: 'barbearia', name: 'Barbearias & Salões', icon: '✂️' },
+  { key: 'odontologia', name: 'Odontologia', icon: '🦷' },
+  { key: 'estetica', name: 'Estética & Spas', icon: '✨' },
+  { key: 'academia', name: 'Academias & Treino', icon: '💪' },
+  { key: 'oficina', name: 'Oficinas & Auto', icon: '🔧' },
+  { key: 'petshop', name: 'Pet Shops', icon: '🐾' },
+  { key: 'imobiliaria', name: 'Imobiliárias', icon: '🏠' },
+  { key: 'servicos', name: 'Serviços & Escritórios', icon: '💼' },
+  { key: 'comercio', name: 'Comércio Local', icon: '🛍️' },
+];
+
 export default function DescobertaPage() {
   const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
   const [center, setCenter] = useState({ lat: -23.1857, lng: -46.8978 }); // Default to Jundiaí / SP
   const [searchQuery, setSearchQuery] = useState('Rua do Retiro, Jundiaí');
   const [radiusKm, setRadiusKm] = useState<number>(3);
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
+
+  // "Buscar nesta área" on map move
+  const [pendingMoveCenter, setPendingMoveCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [showSearchAreaBtn, setShowSearchAreaBtn] = useState(false);
 
   // Autocomplete suggestions
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -84,6 +103,8 @@ export default function DescobertaPage() {
   async function handleSearch(lat?: number, lng?: number, queryOverride?: string) {
     try {
       setLoading(true);
+      setShowSearchAreaBtn(false);
+      setPendingMoveCenter(null);
       const targetLat = lat !== undefined ? lat : center.lat;
       const targetLng = lng !== undefined ? lng : center.lng;
       const targetQuery = queryOverride !== undefined ? queryOverride : searchQuery;
@@ -115,6 +136,26 @@ export default function DescobertaPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleMapMoveEnd(newCenter: { lat: number; lng: number }) {
+    const dLat = (newCenter.lat - center.lat) * 111;
+    const dLng = (newCenter.lng - center.lng) * 111 * Math.cos((center.lat * Math.PI) / 180);
+    const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
+
+    if (distKm > 0.2) {
+      setPendingMoveCenter(newCenter);
+      setShowSearchAreaBtn(true);
+    }
+  }
+
+  function handleSearchInThisArea() {
+    if (!pendingMoveCenter) return;
+    setShowSearchAreaBtn(false);
+    const target = { ...pendingMoveCenter };
+    setCenter(target);
+    handleSearch(target.lat, target.lng);
+    toastInfo('Atualizando estabelecimentos nesta área...');
   }
 
   // Initial load
@@ -369,6 +410,30 @@ export default function DescobertaPage() {
           <span className="font-semibold text-zinc-300">Localização ativa:</span>
           <span className="truncate">{userLocationName}</span>
         </div>
+
+        {/* Category & Segment Filter Bar */}
+        <div className="pt-2 border-t border-zinc-800/80">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {CATEGORY_FILTERS.map((cat) => {
+              const isSelected = selectedCategory === cat.key;
+              return (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
+                    isSelected
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-1 ring-blue-400'
+                      : 'bg-zinc-900/90 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  }`}
+                >
+                  <span className="text-xs">{cat.icon}</span>
+                  <span>{cat.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Selected Location Action Banner (When user clicks on map) */}
@@ -402,14 +467,32 @@ export default function DescobertaPage() {
         </div>
       )}
 
-      {/* Interactive Map */}
+      {/* Interactive Map with Floating Search in Area Button */}
       <div className="w-full h-[550px] relative">
+        {showSearchAreaBtn && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] animate-in fade-in slide-in-from-top-2 duration-200">
+            <button
+              onClick={handleSearchInThisArea}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-full shadow-2xl shadow-black/80 border border-white/20 transition-all hover:scale-105 active:scale-95 cursor-pointer backdrop-blur-md"
+            >
+              {loading ? (
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Search className="w-3.5 h-3.5" />
+              )}
+              <span>Buscar nesta área</span>
+            </button>
+          </div>
+        )}
+
         <MapComponent
           center={center}
           businesses={businesses}
           radiusKm={radiusKm}
           onSelectBusiness={handleSelectBusiness}
           onMapClick={handleMapClick}
+          onMoveEnd={handleMapMoveEnd}
           selectedCustomPin={
             selectedPin
               ? {

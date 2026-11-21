@@ -265,6 +265,70 @@ const ALL_CATEGORIES_EXPANDED = [
   'borracharia',
 ];
 
+// Intelligent category matcher based on business name and OSM tags
+export function matchCategoryFromTagsAndName(
+  tags: Record<string, any>,
+  rawName: string
+): CategoryDefinition {
+  const normName = (rawName || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  const fallback =
+    BUSINESS_CATEGORIES.find((c) => c.key === 'servicos') || BUSINESS_CATEGORIES[BUSINESS_CATEGORIES.length - 1];
+
+  // 1. Direct name keyword matching (highest precision in Brazil)
+  if (/\b(pizza|pizzaria|forneria|esfiha|esfiharia|calzone)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'pizzaria') || fallback;
+  }
+  if (/\b(hamburguer|hamburgueria|burger|burguer|smash|lanches|pastel|pastelaria)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'pizzaria') || BUSINESS_CATEGORIES.find((c) => c.key === 'restaurante') || fallback;
+  }
+  if (/\b(barbearia|barber|barbeiro|cabeleireir|salao de beleza|studio hair|hair studio|esmaltaria|sobrancelha|manicure|unhas|podologia|corte masculino|corte feminino)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'barbearia') || fallback;
+  }
+  if (/\b(odonto|odontologia|dentista|dentaria|ortodontia|implantes dentarios|sorriso|dental|implante)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'odontologia') || fallback;
+  }
+  if (/\b(estetica|spa|depilacao|harmonizacao|massagem|drenagem|bronzeamento|bronze|clinica de estetica)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'estetica') || fallback;
+  }
+  if (/\b(academia|fitness|crossfit|pilates|personal|treinamento|musculacao|jiu jitsu|muay thai|lutas|natacao|cross|gym)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'academia') || fallback;
+  }
+  if (/\b(mecanica|oficina|auto center|auto eletrica|funilaria|pneus|troca de oleo|borracharia|lava rapido|auto pecas|retifica|freios|escapamentos|martelinho|posto)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'oficina') || fallback;
+  }
+  if (/\b(pet|pet shop|petshop|veterinari|vet|banho e tosa|agropecuaria|racao|animais|canil|filhotes)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'petshop') || fallback;
+  }
+  if (/\b(imoveis|imobiliaria|corretor|corretora|empreendimentos imobiliarios|locacao de imoveis)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'imobiliaria') || fallback;
+  }
+  if (/\b(colegio|escola|curso|idiomas|idioma|faculdade|bercario|ensino|instituto de educacao|preparatorio)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'escola') || fallback;
+  }
+  if (/\b(restaurante|churrascaria|bistro|buffet|comida|gastronomia|cafe|cafeteria|padaria|panificadora|confeitaria|doceria|choperia|cervejaria|bar|boteco|cantina|emporio|acougue|rotisserie|peixaria)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'restaurante') || fallback;
+  }
+  if (/\b(otica|joalheria|relojoaria|floricultura|papelaria|roupas|calcados|boutique|moda|loja|supermercado|mercado|farmacia|drogaria)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'servicos') || fallback;
+  }
+  if (/\b(contabilidade|contabil|advocacia|advogado|cartorio|despachante|grafica|consultoria|seguros|engenharia|arquitetura|coworking|assistencia tecnica)\b/.test(normName)) {
+    return BUSINESS_CATEGORIES.find((c) => c.key === 'servicos') || fallback;
+  }
+
+  // 2. OSM Tag matching
+  for (const cat of BUSINESS_CATEGORIES) {
+    if (cat.osmTags.some((t) => t.values.includes(tags[t.key]))) {
+      return cat;
+    }
+  }
+
+  return fallback;
+}
+
 // 1. Live Real POI search via OpenStreetMap Nominatim with street and category expansion
 async function searchPlacesNominatim(
   lat: number,
@@ -352,27 +416,10 @@ async function searchPlacesNominatim(
 
         const dist = calculateDistanceKm(lat, lng, itemLat, itemLng);
 
-        // Category determination
-        let matchedCat: CategoryDefinition =
-          BUSINESS_CATEGORIES.find((c) => c.key === 'outros') || BUSINESS_CATEGORIES[BUSINESS_CATEGORIES.length - 1];
-        if (categoryKey && categoryKey !== 'todos') {
-          const found = BUSINESS_CATEGORIES.find((c) => c.key === categoryKey);
-          if (found) matchedCat = found;
-        } else {
-          // Category = the segment whose search term found this place
-          const kw = foundByKeyword.toLowerCase();
-          for (const [catK, keys] of Object.entries(BROAD_COMMERCIAL_TERMS)) {
-            if (keys.some((k) => k.toLowerCase() === kw)) {
-              const f = BUSINESS_CATEGORIES.find((c) => c.key === catK);
-              if (f) {
-                matchedCat = f;
-                break;
-              }
-            }
-          }
-          if (kw === 'restaurante' || kw === 'churrascaria' || kw === 'lanchonete' || kw === 'cafeteria' || kw === 'padaria' || kw === 'bar' || kw === 'sorveteria') {
-            matchedCat = BUSINESS_CATEGORIES.find((c) => c.key === 'restaurante') || matchedCat;
-          }
+        // Category determination using accurate tag + name matcher
+        let matchedCat: CategoryDefinition = matchCategoryFromTagsAndName(item.extratags || {}, name);
+        if (categoryKey && categoryKey !== 'todos' && matchedCat.key !== categoryKey) {
+          continue;
         }
 
         const addr = item.address || {};
@@ -493,17 +540,9 @@ async function searchPlacesOverpassEngine(
 
         const dist = calculateDistanceKm(lat, lng, itemLat, itemLng);
 
-        let matchedCategory = BUSINESS_CATEGORIES[0];
-        for (const cat of BUSINESS_CATEGORIES) {
-          let found = false;
-          for (const tag of cat.osmTags) {
-            if (tag.values.includes(tags[tag.key])) {
-              matchedCategory = cat;
-              found = true;
-              break;
-            }
-          }
-          if (found) break;
+        const matchedCategory = matchCategoryFromTagsAndName(tags, String(name));
+        if (categoryKey && categoryKey !== 'todos' && matchedCategory.key !== categoryKey) {
+          continue;
         }
 
         let rawWebsite = tags.website || tags['contact:website'] || tags.url;
@@ -592,7 +631,7 @@ async function searchPlacesGoogle(
       if (!itemLat || !itemLng) continue;
 
       const dist = calculateDistanceKm(lat, lng, itemLat, itemLng);
-      const cat = (categoryKey && categoryKey !== 'todos' && BUSINESS_CATEGORIES.find((c) => c.key === categoryKey)) || BUSINESS_CATEGORIES[0];
+      const cat = (categoryKey && categoryKey !== 'todos' && BUSINESS_CATEGORIES.find((c) => c.key === categoryKey)) || matchCategoryFromTagsAndName({}, place.name);
 
       const analyzed = analyzeOpportunity({
         id: `google-${place.place_id}`,
@@ -702,13 +741,15 @@ async function searchPlacesOverpassGeneric(
     [out:json][timeout:15]${bbox};
     (
       nwr["shop"]["name"];
-      nwr["amenity"~"^(${amenities})$"]["name"];
+      nwr["amenity"]["name"];
       nwr["office"]["name"];
       nwr["craft"]["name"];
-      nwr["leisure"~"^(fitness_centre|sports_centre|dance)$"]["name"];
+      nwr["leisure"]["name"];
       nwr["healthcare"]["name"];
+      nwr["tourism"]["name"];
+      nwr["building"~"^(commercial|retail|supermarket|hotel)$"]["name"];
     );
-    out center 400;
+    out center 1200;
   `;
 
   const mirrors = [
@@ -718,9 +759,6 @@ async function searchPlacesOverpassGeneric(
     'https://overpass.kumi.systems/api/interpreter',
     'https://overpass.private.coffee/api/interpreter',
   ];
-
-  const fallbackCat =
-    BUSINESS_CATEGORIES.find((c) => c.key === 'outros') || BUSINESS_CATEGORIES[BUSINESS_CATEGORIES.length - 1];
 
   const runMirror = async (mirror: string): Promise<Business[]> => {
     try {
@@ -747,13 +785,7 @@ async function searchPlacesOverpassGeneric(
         const itemLng = el.lon || el.center?.lon;
         if (!itemLat || !itemLng) continue;
 
-        let matched: CategoryDefinition = fallbackCat;
-        for (const cat of BUSINESS_CATEGORIES) {
-          if (cat.osmTags.some((t) => t.values.includes(tags[t.key]))) {
-            matched = cat;
-            break;
-          }
-        }
+        const matched = matchCategoryFromTagsAndName(tags, String(name));
         if (categoryKey && categoryKey !== 'todos' && matched.key !== categoryKey) continue;
 
         let rawWebsite = tags.website || tags['contact:website'] || tags.url;

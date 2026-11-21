@@ -39,6 +39,76 @@ const CATEGORY_OPTIONS = [
   { key: 'outros', name: 'Outro Segmento', icon: '📍' },
 ];
 
+export const CATEGORY_STYLE_RECOMMENDATIONS: Record<
+  string,
+  {
+    recommendedStyleId: StylePresetId;
+    tagLabel: string;
+    explanation: string;
+  }
+> = {
+  pizzaria: {
+    recommendedStyleId: 'urban-bold',
+    tagLabel: 'Indicado para Pizzarias & Burgers',
+    explanation: 'Cores quentes e marcantes que despertam apetite e aumentam pedidos no WhatsApp.',
+  },
+  restaurante: {
+    recommendedStyleId: 'modern-minimalist',
+    tagLabel: 'Indicado para Restaurantes',
+    explanation: 'Design sofisticado e limpo que valoriza fotografias de pratos e reservas.',
+  },
+  barbearia: {
+    recommendedStyleId: 'urban-bold',
+    tagLabel: 'Indicado para Barbearias',
+    explanation: 'Estética escura, moderna e autêntica, ideal para o público de cuidados masculinos e estilo.',
+  },
+  odontologia: {
+    recommendedStyleId: 'clean-commercial',
+    tagLabel: 'Indicado para Odontologia',
+    explanation: 'Visual clean em tons de azul e branco, transmitindo assepsia, credibilidade e acolhimento.',
+  },
+  estetica: {
+    recommendedStyleId: 'premium-sophisticated',
+    tagLabel: 'Indicado para Estética & Spa',
+    explanation: 'Tons de dourado e acabamento nobre que valorizam procedimentos de alto padrão e auto-estima.',
+  },
+  academia: {
+    recommendedStyleId: 'sports-energetic',
+    tagLabel: 'Indicado para Academias & Treino',
+    explanation: 'Visual eletrizante e dinâmico que motiva a matrícula imediata e transmite alta performance.',
+  },
+  oficina: {
+    recommendedStyleId: 'corporate-elegant',
+    tagLabel: 'Indicado para Oficinas & Auto',
+    explanation: 'Estética sólida e profissional que passa total transparência e confiança mecânica.',
+  },
+  petshop: {
+    recommendedStyleId: 'creative-playful',
+    tagLabel: 'Indicado para Pet Shops',
+    explanation: 'Tons amigáveis e acolhedores que transmitem carinho, cuidado animal e simpatia.',
+  },
+  imobiliaria: {
+    recommendedStyleId: 'luxury-exclusive',
+    tagLabel: 'Indicado para Imobiliárias',
+    explanation: 'Visual de alto valor percebido com detalhes champanhe para imóveis de prestígio.',
+  },
+  servicos: {
+    recommendedStyleId: 'clean-commercial',
+    tagLabel: 'Indicado para Serviços Locais',
+    explanation: 'Clareza imediata na proposta de valor e contato direto sem ruído visual.',
+  },
+  comercio: {
+    recommendedStyleId: 'modern-minimalist',
+    tagLabel: 'Indicado para Comércio Local',
+    explanation: 'Estrutura direta focada em catálogo de produtos e vendas rápidas.',
+  },
+  outros: {
+    recommendedStyleId: 'modern-minimalist',
+    tagLabel: 'Estilo Recomendado',
+    explanation: 'Design versátil com foco absoluto em conversão e usabilidade móvel.',
+  },
+};
+
 export default function CreateSiteModal({
   isOpen,
   onClose,
@@ -54,18 +124,33 @@ export default function CreateSiteModal({
   const [services, setServices] = useState('');
   const [differentials, setDifferentials] = useState('');
   const [hours, setHours] = useState('Segunda a Sábado das 09h às 19h');
-  const [selectedStyleId, setSelectedStyleId] = useState<StylePresetId>('modern-minimalist');
+  const [selectedStyleId, setSelectedStyleId] = useState<StylePresetId>('urban-bold');
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setName(initialData.name || '');
-      setCategoryKey(initialData.categoryKey || 'pizzaria');
+      const key = initialData.categoryKey || 'pizzaria';
+      setCategoryKey(key);
       setAddress(initialData.address || '');
       setWhatsapp(initialData.whatsapp || initialData.phone || '');
+
+      // Automatically recommend and pre-select the optimal style for this category
+      const rec = CATEGORY_STYLE_RECOMMENDATIONS[key] || CATEGORY_STYLE_RECOMMENDATIONS['outros'];
+      if (rec) {
+        setSelectedStyleId(rec.recommendedStyleId);
+      }
     }
   }, [isOpen, initialData]);
+
+  function handleCategoryChange(newKey: string) {
+    setCategoryKey(newKey);
+    const rec = CATEGORY_STYLE_RECOMMENDATIONS[newKey] || CATEGORY_STYLE_RECOMMENDATIONS['outros'];
+    if (rec) {
+      setSelectedStyleId(rec.recommendedStyleId);
+    }
+  }
 
   if (!isOpen) return null;
 
@@ -209,7 +294,7 @@ export default function CreateSiteModal({
               </label>
               <select
                 value={categoryKey}
-                onChange={(e) => setCategoryKey(e.target.value)}
+                onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-700/80 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {CATEGORY_OPTIONS.map((opt) => (
@@ -313,31 +398,81 @@ export default function CreateSiteModal({
             />
           </div>
 
-          {/* Estilo Visual */}
+          {/* Estilo Visual Recomendado */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-2">
-              Estilo Visual & Cores do Site
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {Object.values(STYLE_PRESETS).slice(0, 4).map((st: LandingPageStyle) => (
-                <button
-                  type="button"
-                  key={st.id}
-                  onClick={() => setSelectedStyleId(st.id)}
-                  className={`p-3 rounded-xl border text-left transition-all ${
-                    selectedStyleId === st.id
-                      ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10'
-                      : 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 mb-1.5">
-                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: st.primaryColor }} />
-                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: st.accentColor }} />
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold text-zinc-300">
+                Estilo Visual & Cores Recomendadas
+              </label>
+              <span className="text-[11px] text-amber-400 font-medium flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                Definido automaticamente pelo ramo
+              </span>
+            </div>
+
+            {/* Recommendation Explanation Pill */}
+            {(() => {
+              const rec = CATEGORY_STYLE_RECOMMENDATIONS[categoryKey] || CATEGORY_STYLE_RECOMMENDATIONS['outros'];
+              return (
+                <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/60 flex items-start gap-2.5 mb-3">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <span className="font-bold text-blue-200">{rec.tagLabel}: </span>
+                    <span className="text-zinc-300">{rec.explanation}</span>
                   </div>
-                  <div className="font-semibold text-xs text-white truncate">{st.name}</div>
-                  <div className="text-[10px] text-zinc-400 truncate">{st.description}</div>
-                </button>
-              ))}
+                </div>
+              );
+            })()}
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {Object.values(STYLE_PRESETS).map((st: LandingPageStyle) => {
+                const rec = CATEGORY_STYLE_RECOMMENDATIONS[categoryKey] || CATEGORY_STYLE_RECOMMENDATIONS['outros'];
+                const isRecommended = st.id === rec.recommendedStyleId;
+                const isSelected = selectedStyleId === st.id;
+
+                return (
+                  <button
+                    type="button"
+                    key={st.id}
+                    onClick={() => setSelectedStyleId(st.id)}
+                    className={`relative p-3 rounded-xl border text-left transition-all ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-500/15 shadow-lg shadow-blue-500/10 ring-1 ring-blue-500'
+                        : isRecommended
+                        ? 'border-amber-500/40 bg-zinc-900/80 hover:border-amber-500/80'
+                        : 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-700'
+                    }`}
+                  >
+                    {isRecommended && (
+                      <div className="absolute -top-2.5 right-2 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[9px] font-extrabold text-black uppercase tracking-wide shadow flex items-center gap-0.5">
+                        ⭐ Indicado
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span
+                        className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm"
+                        style={{ backgroundColor: st.primaryColor }}
+                        title={`Primária: ${st.primaryColor}`}
+                      />
+                      <span
+                        className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm"
+                        style={{ backgroundColor: st.accentColor }}
+                        title={`Destaque: ${st.accentColor}`}
+                      />
+                      <span
+                        className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm"
+                        style={{ backgroundColor: st.bgColor }}
+                        title={`Fundo: ${st.bgColor}`}
+                      />
+                    </div>
+                    <div className="font-semibold text-xs text-white truncate flex items-center justify-between">
+                      <span>{st.name}</span>
+                      {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                    </div>
+                    <div className="text-[10px] text-zinc-400 line-clamp-2 mt-0.5">{st.description}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

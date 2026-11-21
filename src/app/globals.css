@@ -93,3 +93,29 @@ body {
 .leaflet-popup-tip {
   background: #18181b !important;
 }
+
+.leaflet-tooltip {
+  background: #18181b !important;
+  color: #f4f4f5 !important;
+  border: 1px solid #3f3f46 !important;
+  border-radius: 6px !important;
+  padding: 4px 8px !important;
+  font-family: inherit !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+.leaflet-tooltip-top:before {
+  border-top-color: #18181b !important;
+}
+
+.leaflet-tooltip-bottom:before {
+  border-bottom-color: #18181b !important;
+}
+
+.leaflet-tooltip-left:before {
+  border-left-color: #18181b !important;
+}
+
+.leaflet-tooltip-right:before {
+  border-right-color: #18181b !important;
+}

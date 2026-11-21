@@ -10,8 +10,35 @@ interface MapComponentProps {
   selectedBusinessId?: string;
   onSelectBusiness?: (business: Business) => void;
   onMapClick?: (coords: { lat: number; lng: number }) => void;
+  onMoveEnd?: (center: { lat: number; lng: number }) => void;
   selectedCustomPin?: { lat: number; lng: number; label?: string } | null;
   radiusKm?: number;
+}
+
+function getCategoryColor(categoryKey?: string): string {
+  switch (categoryKey) {
+    case 'pizzaria':
+    case 'restaurante':
+      return '#f97316'; // Laranja gastronômico
+    case 'barbearia':
+      return '#8b5cf6'; // Roxo estilizado
+    case 'odontologia':
+      return '#0284c7'; // Azul médico / odontológico
+    case 'estetica':
+      return '#ec4899'; // Rosa estética e bem-estar
+    case 'academia':
+      return '#ef4444'; // Vermelho fitness / energia
+    case 'oficina':
+      return '#64748b'; // Cinza / slate mecânico
+    case 'petshop':
+      return '#10b981'; // Verde pet / saúde animal
+    case 'imobiliaria':
+      return '#f59e0b'; // Âmbar / dourado imobiliário
+    case 'escola':
+      return '#6366f1'; // Índigo educação
+    default:
+      return '#3b82f6'; // Azul comercial padrão
+  }
 }
 
 export default function MapComponent({
@@ -20,6 +47,7 @@ export default function MapComponent({
   selectedBusinessId,
   onSelectBusiness,
   onMapClick,
+  onMoveEnd,
   selectedCustomPin,
   radiusKm = 5,
 }: MapComponentProps) {
@@ -29,6 +57,11 @@ export default function MapComponent({
   const markersRef = useRef<any[]>([]);
   const customPinMarkerRef = useRef<any>(null);
   const circleRef = useRef<any>(null);
+  const onMoveEndRef = useRef(onMoveEnd);
+
+  useEffect(() => {
+    onMoveEndRef.current = onMoveEnd;
+  }, [onMoveEnd]);
 
   const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'osm'>('roadmap');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -123,6 +156,14 @@ export default function MapComponent({
           }
         });
 
+        // Trigger onMoveEnd when map is panned or zoomed
+        map.on('moveend', () => {
+          if (onMoveEndRef.current) {
+            const c = map.getCenter();
+            onMoveEndRef.current({ lat: c.lat, lng: c.lng });
+          }
+        });
+
         mapInstanceRef.current = map;
       }
 
@@ -170,49 +211,73 @@ export default function MapComponent({
         .bindPopup('<b>Centro da Busca / Sua Localização</b>');
       markersRef.current.push(userMarker);
 
-      // Business markers on the map
+      // Business markers on the map (Compact Google Maps POI style)
       businesses.forEach((biz) => {
         const isSelected = biz.id === selectedBusinessId;
+        const color = getCategoryColor(biz.categoryKey);
+        const pinSize = isSelected ? 22 : 16;
+        const dotSize = isSelected ? 6 : 4;
+
         const customMarkerHtml = `
           <div style="
             display: flex; align-items: center; justify-content: center;
-            width: ${isSelected ? '38px' : '32px'};
-            height: ${isSelected ? '38px' : '32px'};
-            background: ${isSelected ? '#2563eb' : '#ea580c'};
+            width: ${pinSize}px;
+            height: ${pinSize}px;
+            background: ${color};
             border: 2px solid #ffffff;
             border-radius: 50%;
-            color: #ffffff; font-weight: bold; font-size: 14px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-            cursor: pointer; transition: transform 0.15s ease-in-out;
-          " title="${biz.name}">
-            📍
+            box-shadow: ${
+              isSelected
+                ? '0 0 0 4px rgba(59,130,246,0.5), 0 4px 12px rgba(0,0,0,0.6)'
+                : '0 2px 5px rgba(0,0,0,0.45)'
+            };
+            cursor: pointer;
+            transition: transform 0.15s ease-in-out;
+          ">
+            <div style="
+              width: ${dotSize}px;
+              height: ${dotSize}px;
+              background: #ffffff;
+              border-radius: 50%;
+            "></div>
           </div>
         `;
 
         const icon = L.divIcon({
           className: 'custom-biz-pin',
           html: customMarkerHtml,
-          iconSize: isSelected ? [38, 38] : [32, 32],
-          iconAnchor: isSelected ? [19, 19] : [16, 16],
+          iconSize: [pinSize, pinSize],
+          iconAnchor: [pinSize / 2, pinSize / 2],
         });
 
         const marker = L.marker([biz.lat, biz.lng], { icon }).addTo(map);
 
+        // Instant hover tooltip showing business name & category
+        marker.bindTooltip(
+          `<div style="font-weight: 700; font-size: 11px; line-height: 1.2;">${biz.name}</div><div style="font-size: 10px; color: #a1a1aa; margin-top: 2px;">${biz.category}</div>`,
+          {
+            direction: 'top',
+            offset: [0, -pinSize / 2 - 4],
+            opacity: 0.95,
+          }
+        );
+
         const popupContent = `
-          <div style="padding: 6px; font-family: system-ui, sans-serif; min-width: 210px; color: #18181b;">
-            <div style="font-size: 15px; font-weight: 700; margin-bottom: 2px; line-height: 1.2;">
+          <div style="padding: 6px; font-family: system-ui, sans-serif; min-width: 220px; color: #f4f4f5;">
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+              <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${color};"></span>
+              <span style="font-size: 11px; font-weight: 600; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.05em;">${biz.category}</span>
+            </div>
+            <div style="font-size: 15px; font-weight: 700; margin-bottom: 4px; line-height: 1.2; color: #ffffff;">
               ${biz.name}
             </div>
-            <div style="font-size: 12px; color: #4b5563; margin-bottom: 4px;">
-              ${biz.category}
-            </div>
-            <div style="font-size: 11px; color: #6b7280; margin-bottom: 10px;">
+            <div style="font-size: 11px; color: #9ca3af; margin-bottom: 12px; line-height: 1.3;">
               ${biz.address}
             </div>
             <button id="btn-popup-${biz.id}" style="
               width: 100%; padding: 8px 12px; background: #2563eb; color: white;
-              border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;
-              box-shadow: 0 2px 6px rgba(37,99,235,0.3);
+              border: none; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
+              box-shadow: 0 2px 8px rgba(37,99,235,0.4); transition: background 0.15s ease;
             ">
               ✨ Criar Site para este Local
             </button>
