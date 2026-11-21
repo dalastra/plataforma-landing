@@ -30,10 +30,11 @@ export async function POST(req: NextRequest) {
     }
 
     const settings = await getUserSettings(user.id);
+    const geminiApiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY;
     const project = await generateLandingPageProject(
       business,
       style,
-      settings.geminiApiKey,
+      geminiApiKey,
       reference
     );
 
