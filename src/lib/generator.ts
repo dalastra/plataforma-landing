@@ -1615,7 +1615,7 @@ export function renderStandaloneHtml(
       }
       <div style="font-weight: 800; font-size: 16px; margin-bottom: 8px;">${content.businessName}</div>
       <p style="margin-bottom: 12px; color: var(--subtle);">${content.location.address}</p>
-      <p>© ${new Date().getFullYear()} ${content.businessName}. Todos os direitos reservados. Demonstração comercial desenvolvida com inteligência artificial.</p>
+      <p>© ${new Date().getFullYear()} ${content.businessName}. Todos os direitos reservados.</p>
     </div>
   </footer>
 
