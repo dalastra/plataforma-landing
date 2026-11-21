@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { LandingPageProject, Business, CommercialPitch } from '@/types';
+import { LandingPageProject, Business, CommercialPitch, StylePresetId, HeroLayoutType, CardStyleType } from '@/types';
 import { generateCommercialPitches } from '@/lib/pitch';
 import { renderStandaloneHtml } from '@/lib/generator';
+import { STYLE_PRESETS } from '@/lib/constants';
 import { useToast } from '@/context/ToastContext';
 import {
   X,
@@ -79,7 +80,7 @@ function LandingPageEditorInner({
     };
   }, []);
 
-  const [activeTab, setActiveTab] = useState<'preview' | 'edit' | 'pitch'>('preview');
+  const [activeTab, setActiveTab] = useState<'preview' | 'edit' | 'style' | 'pitch'>('preview');
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop');
   const [pitchVariant, setPitchVariant] = useState<'whatsapp' | 'instagram' | 'direct' | 'formal' | 'casual'>('whatsapp');
   const [copiedPitch, setCopiedPitch] = useState(false);
@@ -179,9 +180,10 @@ function LandingPageEditorInner({
     toastSuccess('Logotipo removido.');
   }
 
-  function handleSaveEdits() {
+  async function handleSaveEdits() {
     if (!project) return;
     const updated: LandingPageProject = {
+      ...project,
       id: project.id,
       businessId: project.businessId,
       businessName: project.businessName,
@@ -195,7 +197,17 @@ function LandingPageEditorInner({
       updatedAt: new Date().toISOString(),
     };
     onUpdateProject(updated);
-    toastSuccess('Alterações salvas com sucesso!');
+    try {
+      await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      toastSuccess('Alterações salvas e sincronizadas!');
+    } catch (err) {
+      console.warn('Erro ao sincronizar projeto na nuvem:', err);
+      toastSuccess('Alterações salvas na sessão.');
+    }
   }
 
   function handleCopy(text: string, isPitch = false) {
@@ -348,6 +360,18 @@ function LandingPageEditorInner({
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>Editor & Textos</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('style')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === 'style'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Palette className="w-3.5 h-3.5" />
+              <span>Design & Estilo</span>
             </button>
 
             <button
@@ -893,6 +917,110 @@ function LandingPageEditorInner({
                     </div>
                   ))}
                 </div>
+
+                {/* Specialized Module: Menu / Cardapio */}
+                {content.cardapioItems && content.cardapioItems.length > 0 && (
+                  <div className="space-y-3 pt-4 border-t border-zinc-800/80">
+                    <div className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                      Cardápio & Itens de Destaque
+                    </div>
+                    {content.cardapioItems.map((item, idx) => (
+                      <div key={item.id || idx} className="p-3 bg-zinc-900/60 rounded-lg border border-zinc-800 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => {
+                              const list = [...(content.cardapioItems || [])];
+                              list[idx].name = e.target.value;
+                              setContent({ ...content, cardapioItems: list });
+                            }}
+                            className="flex-1 text-xs font-bold bg-zinc-900 border border-zinc-800 rounded p-1.5 text-zinc-100"
+                          />
+                          <input
+                            type="text"
+                            value={item.price}
+                            onChange={(e) => {
+                              const list = [...(content.cardapioItems || [])];
+                              list[idx].price = e.target.value;
+                              setContent({ ...content, cardapioItems: list });
+                            }}
+                            className="w-24 text-xs font-mono font-bold bg-zinc-900 border border-zinc-800 rounded p-1.5 text-amber-400 text-right"
+                          />
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={item.description}
+                          onChange={(e) => {
+                            const list = [...(content.cardapioItems || [])];
+                            list[idx].description = e.target.value;
+                            setContent({ ...content, cardapioItems: list });
+                          }}
+                          className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded p-1.5 text-zinc-300"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Testimonials */}
+                <div className="space-y-3 pt-4 border-t border-zinc-800/80">
+                  <div className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                    Avaliações de Clientes
+                  </div>
+                  {content.testimonials.items.map((testi, idx) => (
+                    <div key={idx} className="p-3 bg-zinc-900/60 rounded-lg border border-zinc-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <input
+                          type="text"
+                          value={testi.author}
+                          onChange={(e) => {
+                            const list = [...content.testimonials.items];
+                            list[idx].author = e.target.value;
+                            setContent({ ...content, testimonials: { ...content.testimonials, items: list } });
+                          }}
+                          className="text-xs font-bold bg-zinc-900 border border-zinc-800 rounded p-1.5 text-zinc-100 flex-1 mr-2"
+                        />
+                        <span className="text-amber-400 text-xs">★★★★★</span>
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={testi.text}
+                        onChange={(e) => {
+                          const list = [...content.testimonials.items];
+                          list[idx].text = e.target.value;
+                          setContent({ ...content, testimonials: { ...content.testimonials, items: list } });
+                        }}
+                        className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded p-1.5 text-zinc-300"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* SEO & Social Share Settings */}
+                <div className="space-y-3 pt-4 border-t border-zinc-800/80">
+                  <div className="text-xs font-bold uppercase tracking-wider text-purple-400">
+                    SEO & Compartilhamento Social (WhatsApp / Google)
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-zinc-400 mb-1">Título da Página (Meta Title)</label>
+                    <input
+                      type="text"
+                      value={content.businessName}
+                      onChange={(e) => setContent({ ...content, businessName: e.target.value })}
+                      className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded p-2 text-zinc-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-zinc-400 mb-1">Slogan / Tagline Comercial</label>
+                    <input
+                      type="text"
+                      value={content.tagline}
+                      onChange={(e) => setContent({ ...content, tagline: e.target.value })}
+                      className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded p-2 text-zinc-100"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Side Live Mini-Preview */}
@@ -900,6 +1028,260 @@ function LandingPageEditorInner({
                 <div className="w-full h-full rounded-xl overflow-hidden border border-zinc-800 shadow-2xl bg-white">
                   <iframe
                     title="Live Edit Preview"
+                    srcDoc={currentHtml}
+                    className="w-full h-full border-0"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: VISUAL DESIGN & STYLE CONTROLS */}
+          {activeTab === 'style' && (
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden bg-[#0c0c0e]">
+              <div className="w-full md:w-1/2 p-6 overflow-y-auto space-y-6 border-r border-zinc-800">
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                  <div>
+                    <h3 className="font-bold text-base text-white">Direção de Arte & Estilo</h3>
+                    <p className="text-xs text-zinc-400">Personalize a identidade visual e o layout desta página</p>
+                  </div>
+                  <button
+                    onClick={handleSaveEdits}
+                    className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition-colors"
+                  >
+                    Salvar Estilo
+                  </button>
+                </div>
+
+                {/* Archetype / Preset selector */}
+                <div className="space-y-3">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-blue-400">
+                    Arquétipos Visuais Profissionais
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.values(STYLE_PRESETS).map((p) => {
+                      const isSelected = style.id === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setStyle({
+                              ...style,
+                              id: p.id,
+                              name: p.name,
+                              description: p.description,
+                              primaryColor: p.primaryColor,
+                              secondaryColor: p.secondaryColor,
+                              accentColor: p.accentColor,
+                              bgColor: p.bgColor,
+                              textColor: p.textColor,
+                              fontHeading: p.fontHeading,
+                              fontBody: p.fontBody,
+                              buttonRadius: p.buttonRadius,
+                              theme: p.theme,
+                            });
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${
+                            isSelected
+                              ? 'bg-blue-600/15 border-blue-500 text-white shadow-md'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs">{p.name}</span>
+                            <div className="flex items-center gap-1">
+                              <span className="w-3 h-3 rounded-full border border-black/30" style={{ backgroundColor: p.primaryColor }} />
+                              <span className="w-3 h-3 rounded-full border border-black/30" style={{ backgroundColor: p.accentColor }} />
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-zinc-400 line-clamp-2">{p.description}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Hero Layout & Structure */}
+                <div className="space-y-3 pt-3 border-t border-zinc-800">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-blue-400">
+                    Composição da Primeira Dobra (Hero)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'split-right', label: 'Split Moderno', desc: 'Texto à esquerda + Foto e Card Flutuante' },
+                      { id: 'card-overlay', label: 'Card c/ WhatsApp', desc: 'Caixa de contato direto sobreposta' },
+                      { id: 'editorial-clean', label: 'Editorial Revista', desc: 'Composição minimalista centralizada' },
+                      { id: 'centered', label: 'Centralizado Focado', desc: 'Chamada imponente de alta conversão' },
+                    ].map((item) => {
+                      const isCurrent = (style.heroLayout || content.heroLayout || 'split-right') === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setStyle({ ...style, heroLayout: item.id as HeroLayoutType });
+                            setContent({ ...content, heroLayout: item.id as HeroLayoutType });
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all ${
+                            isCurrent
+                              ? 'bg-purple-600/15 border-purple-500 text-white'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div className="font-bold text-xs mb-1">{item.label}</div>
+                          <div className="text-[10px] text-zinc-400">{item.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Theme & Cards Style */}
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-zinc-800">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5 font-semibold">Tema Geral</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setStyle({ ...style, theme: 'dark', bgColor: '#0a0c10', textColor: '#f8fafc' })}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all ${
+                          style.theme === 'dark'
+                            ? 'bg-zinc-800 border-white text-white'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        🌙 Dark
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStyle({ ...style, theme: 'light', bgColor: '#ffffff', textColor: '#0f172a' })}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all ${
+                          style.theme === 'light'
+                            ? 'bg-white border-blue-500 text-black'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        ☀️ Light
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5 font-semibold">Acabamento dos Cards</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'glass', label: 'Glass' },
+                        { id: 'solid', label: 'Sólido' },
+                        { id: 'bordered', label: 'Bordas' },
+                      ].map((c) => {
+                        const isCurrent = (style.cardStyle || 'glass') === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setStyle({ ...style, cardStyle: c.id as CardStyleType })}
+                            className={`py-2 px-1 rounded-lg text-xs font-bold border text-center transition-all ${
+                              isCurrent
+                                ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                                : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            {c.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Typography Selector */}
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-zinc-800">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1 font-semibold">Tipografia de Títulos</label>
+                    <select
+                      value={style.fontHeading}
+                      onChange={(e) => setStyle({ ...style, fontHeading: e.target.value })}
+                      className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-zinc-100"
+                    >
+                      <option value="Outfit, sans-serif">Outfit (Moderna & Equilibrada)</option>
+                      <option value="Montserrat, sans-serif">Montserrat (Geométrica & Elegante)</option>
+                      <option value="Playfair Display, serif">Playfair Display (Editorial Clássica)</option>
+                      <option value="Cinzel, serif">Cinzel (Luxuosa & Romana)</option>
+                      <option value="Barlow Condensed, sans-serif">Barlow Condensed (Esportiva & Impacto)</option>
+                      <option value="Plus Jakarta Sans, sans-serif">Plus Jakarta Sans (Tecnológica & Alta Conversão)</option>
+                      <option value="Inter, sans-serif">Inter (Clara & Minimalista)</option>
+                      <option value="Sora, sans-serif">Sora (Autoritária & Robusta)</option>
+                      <option value="Oswald, sans-serif">Oswald (Masculina & Forte)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1 font-semibold">Curvatura dos Botões</label>
+                    <select
+                      value={style.buttonRadius}
+                      onChange={(e) => setStyle({ ...style, buttonRadius: e.target.value as any })}
+                      className="w-full text-xs bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-zinc-100"
+                    >
+                      <option value="rounded-none">Reto / Sharp (0px)</option>
+                      <option value="rounded-md">Suave (8px)</option>
+                      <option value="rounded-xl">Moderno (16px)</option>
+                      <option value="rounded-full">Pílula Arredondada (9999px)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Color Pickers */}
+                <div className="p-3.5 rounded-xl bg-zinc-900/80 border border-zinc-800 space-y-3">
+                  <div className="text-xs font-bold text-zinc-200">Paleta de Cores Manual</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <span className="block text-[11px] text-zinc-400 mb-1">Primária (Botão)</span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={style.primaryColor}
+                          onChange={(e) => setStyle({ ...style, primaryColor: e.target.value })}
+                          className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
+                        />
+                        <span className="text-[11px] font-mono text-zinc-300 uppercase">{style.primaryColor}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="block text-[11px] text-zinc-400 mb-1">Acento (Preços)</span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={style.accentColor}
+                          onChange={(e) => setStyle({ ...style, accentColor: e.target.value })}
+                          className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
+                        />
+                        <span className="text-[11px] font-mono text-zinc-300 uppercase">{style.accentColor}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="block text-[11px] text-zinc-400 mb-1">Fundo da Página</span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={style.bgColor}
+                          onChange={(e) => setStyle({ ...style, bgColor: e.target.value })}
+                          className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
+                        />
+                        <span className="text-[11px] font-mono text-zinc-300 uppercase">{style.bgColor}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Side Live Mini-Preview */}
+              <div className="hidden md:flex flex-1 p-4 bg-[#050507] items-center justify-center overflow-hidden">
+                <div className="w-full h-full rounded-xl overflow-hidden border border-zinc-800 shadow-2xl bg-white">
+                  <iframe
+                    title="Live Style Preview"
                     srcDoc={currentHtml}
                     className="w-full h-full border-0"
                   />

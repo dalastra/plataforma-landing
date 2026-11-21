@@ -14,15 +14,20 @@ import {
   Calendar,
   Check,
   Compass,
+  AlertTriangle,
 } from 'lucide-react';
 import { LandingPageProject, Business } from '@/types';
 import LandingPageEditorModal from '@/components/LandingPageEditorModal';
+import { useToast } from '@/context/ToastContext';
 
 export default function ProjetosPage() {
+  const { success: toastSuccess, error: toastError } = useToast();
   const [projects, setProjects] = useState<LandingPageProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<LandingPageProject | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Editor Modal
   const [activeProject, setActiveProject] = useState<LandingPageProject | null>(null);
@@ -47,16 +52,24 @@ export default function ProjetosPage() {
     loadProjects();
   }, []);
 
-  async function handleDeleteProject(id: string) {
-    if (!confirm('Deseja realmente excluir este projeto de landing page?')) return;
+  async function handleConfirmDelete() {
+    if (!projectToDelete) return;
     try {
-      const res = await fetch(`/api/projects?id=${id}`, { method: 'DELETE' });
+      setDeleting(true);
+      const res = await fetch(`/api/projects?id=${projectToDelete.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        setProjects(projects.filter((p) => p.id !== id));
+        setProjects(projects.filter((p) => p.id !== projectToDelete.id));
+        toastSuccess('Projeto excluído com sucesso.');
+        setProjectToDelete(null);
+      } else {
+        toastError(data.error || 'Erro ao excluir projeto');
       }
     } catch (err) {
       console.error('Error deleting project:', err);
+      toastError('Erro de conexão ao excluir projeto');
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -77,9 +90,13 @@ export default function ProjetosPage() {
       const data = await res.json();
       if (data.success) {
         setProjects([data.project, ...projects]);
+        toastSuccess(`Projeto "${proj.businessName}" duplicado com sucesso!`);
+      } else {
+        toastError(data.error || 'Erro ao duplicar projeto');
       }
     } catch (err) {
       console.error('Error duplicating project:', err);
+      toastError('Erro de conexão ao duplicar projeto');
     }
   }
 
@@ -282,7 +299,7 @@ export default function ProjetosPage() {
                     </button>
 
                     <button
-                      onClick={() => handleDeleteProject(proj.id)}
+                      onClick={() => setProjectToDelete(proj)}
                       className="p-1.5 rounded-lg bg-zinc-900 hover:bg-rose-950 text-zinc-500 hover:text-rose-400 border border-zinc-800/80 transition-colors"
                       title="Excluir projeto"
                     >
@@ -293,6 +310,52 @@ export default function ProjetosPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {projectToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#121215] border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Excluir Landing Page</h3>
+                <p className="text-xs text-zinc-400">Esta ação não poderá ser desfeita.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-zinc-300 leading-relaxed bg-zinc-900/60 p-3 rounded-xl border border-zinc-800">
+              Você tem certeza que deseja excluir o projeto <strong className="text-white">"{projectToDelete.businessName}"</strong>?
+              O link de prévia e os arquivos salvos deixarão de estar disponíveis.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setProjectToDelete(null)}
+                disabled={deleting}
+                className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-800 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition-colors flex items-center gap-1.5"
+              >
+                {deleting ? (
+                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>{deleting ? 'Excluindo...' : 'Sim, Excluir'}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

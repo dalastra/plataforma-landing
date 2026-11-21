@@ -1077,6 +1077,15 @@ export function renderStandaloneHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${content.businessName} | ${content.tagline}</title>
   <meta name="description" content="${content.hero.subheadline}">
+  <meta property="og:title" content="${content.businessName} | ${content.tagline}">
+  <meta property="og:description" content="${content.hero.subheadline}">
+  <meta property="og:image" content="${content.hero.backgroundImage}">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${content.businessName} | ${content.tagline}">
+  <meta name="twitter:description" content="${content.hero.subheadline}">
+  <meta name="twitter:image" content="${content.hero.backgroundImage}">
+  <meta name="theme-color" content="${primary}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -1342,6 +1351,29 @@ export function renderStandaloneHtml(
     .testi-author { font-weight: 700; font-size: 15px; }
     .testi-role { font-size: 12px; color: var(--subtle); }
     
+    /* Gallery Grid */
+    .gallery-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;
+    }
+    .gallery-item {
+      position: relative; border-radius: var(--radius); overflow: hidden; height: 270px;
+      border: 1px solid var(--card-border); box-shadow: 0 6px 22px rgba(0,0,0,0.08);
+      background: var(--card-bg);
+    }
+    .gallery-item img {
+      width: 100%; height: 100%; object-fit: cover;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .gallery-item:hover img { transform: scale(1.06); }
+    .gallery-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 60%);
+      display: flex; align-items: flex-end; padding: 18px; opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .gallery-item:hover .gallery-overlay { opacity: 1; }
+    .gallery-caption { color: #ffffff; font-size: 13px; font-weight: 600; }
+    
     /* Barbershop Table */
     .service-table { width: 100%; border-collapse: collapse; }
     .table-row {
@@ -1481,6 +1513,7 @@ export function renderStandaloneHtml(
         ${content.faqItems ? '<a href="#faq">Dúvidas</a>' : ''}
         <a href="#sobre">Sobre</a>
         <a href="#servicos">${layout === 'gastronomy' ? 'Especialidades' : 'Serviços'}</a>
+        ${content.gallery && content.gallery.images && content.gallery.images.length > 0 ? '<a href="#galeria">Galeria</a>' : ''}
         <a href="#depoimentos">Avaliações</a>
         <a href="#contato">Localização</a>
         <a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn" style="padding: 9px 20px; font-size: 13px;">
@@ -1961,6 +1994,35 @@ export function renderStandaloneHtml(
                 <div class="faq-answer">
                   ${f.answer}
                 </div>
+              </div>
+            `
+              )
+              .join('')}
+          </div>
+        </div>
+      </section>
+      `
+      : ''
+  }
+
+  <!-- Gallery Section -->
+  ${
+    content.gallery && content.gallery.images && content.gallery.images.length > 0
+      ? `
+      <section id="galeria" class="section">
+        <div class="container">
+          <div class="section-header">
+            <div class="badge">Espaço & Resultados</div>
+            <h2 class="section-title">${content.gallery.title || 'Conheça Nosso Espaço'}</h2>
+            <p class="section-subtitle">Fotos reais do nosso ambiente, estrutura e atendimento de alto padrão</p>
+          </div>
+          <div class="gallery-grid">
+            ${content.gallery.images
+              .map(
+                (img) => `
+              <div class="gallery-item">
+                <img src="${img.url}" alt="${img.caption || content.businessName}" loading="lazy">
+                ${img.caption ? `<div class="gallery-overlay"><span class="gallery-caption">${img.caption}</span></div>` : ''}
               </div>
             `
               )
