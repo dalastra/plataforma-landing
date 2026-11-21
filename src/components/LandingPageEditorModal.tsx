@@ -22,7 +22,12 @@ import {
   Palette,
   Eye,
   Share2,
+  Upload,
+  Trash2,
+  Search,
+  Loader2,
 } from 'lucide-react';
+import { extractColorsFromImageSrc } from '@/lib/colorExtractor';
 
 interface LandingPageEditorModalProps {
   project: LandingPageProject | null;
@@ -94,6 +99,8 @@ function LandingPageEditorInner({
   // Local state for live editable content
   const [content, setContent] = useState(project.content);
   const [style, setStyle] = useState(project.style);
+  const [searchingLogo, setSearchingLogo] = useState(false);
+  const [extractingColors, setExtractingColors] = useState(false);
 
   const previewUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/preview/${project.id}`
@@ -103,6 +110,74 @@ function LandingPageEditorInner({
 
   // Live updated HTML
   const currentHtml = renderStandaloneHtml(content, style, business);
+
+  async function handleEditorLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result as string;
+      setExtractingColors(true);
+      try {
+        const colors = await extractColorsFromImageSrc(dataUrl);
+        setContent((prev) => ({ ...prev, logoUrl: dataUrl }));
+        setStyle((prev) => ({
+          ...prev,
+          primaryColor: colors.primary,
+          accentColor: colors.accent,
+          isLogoCustomized: true,
+          logoPalette: {
+            primary: colors.primary,
+            accent: colors.accent,
+          },
+        }));
+        toastSuccess('Logotipo atualizado e cores extraídas!');
+      } catch (err) {
+        console.warn('Erro ao extrair cores:', err);
+      } finally {
+        setExtractingColors(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleEditorAutoSearchLogo() {
+    try {
+      setSearchingLogo(true);
+      const res = await fetch(
+        `/api/logo/search?name=${encodeURIComponent(business.name)}&city=${encodeURIComponent(business.city || '')}`
+      );
+      const data = await res.json();
+      if (data.success && data.logoUrl) {
+        setExtractingColors(true);
+        const colors = await extractColorsFromImageSrc(data.logoUrl);
+        setContent((prev) => ({ ...prev, logoUrl: data.logoUrl }));
+        setStyle((prev) => ({
+          ...prev,
+          primaryColor: colors.primary,
+          accentColor: colors.accent,
+          isLogoCustomized: true,
+          logoPalette: {
+            primary: colors.primary,
+            accent: colors.accent,
+          },
+        }));
+        toastSuccess('Logotipo oficial encontrado e cores sincronizadas!');
+      } else {
+        toastError('Nenhum logotipo encontrado automaticamente na busca.');
+      }
+    } catch {
+      toastError('Erro ao buscar logotipo.');
+    } finally {
+      setSearchingLogo(false);
+      setExtractingColors(false);
+    }
+  }
+
+  function handleEditorRemoveLogo() {
+    setContent((prev) => ({ ...prev, logoUrl: undefined }));
+    toastSuccess('Logotipo removido.');
+  }
 
   function handleSaveEdits() {
     if (!project) return;
@@ -115,6 +190,7 @@ function LandingPageEditorInner({
       status: project.status,
       content,
       style,
+      logoUrl: content.logoUrl,
       htmlContent: currentHtml,
       updatedAt: new Date().toISOString(),
     };
@@ -480,6 +556,124 @@ function LandingPageEditorInner({
                   >
                     Salvar Alterações
                   </button>
+                </div>
+
+                {/* Logo & Brand Identity */}
+                <div className="p-3.5 rounded-xl bg-gradient-to-b from-purple-950/20 to-zinc-900 border border-purple-500/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-purple-400" />
+                      <span className="text-xs font-bold text-white">Logotipo & Paleta de Cores da Marca</span>
+                    </div>
+                    {content.logoUrl && (
+                      <button
+                        type="button"
+                        onClick={handleEditorRemoveLogo}
+                        className="text-[11px] text-rose-400 hover:text-rose-300 flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Remover
+                      </button>
+                    )}
+                  </div>
+
+                  {content.logoUrl ? (
+                    <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-zinc-900 border border-zinc-800">
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-12 rounded bg-[radial-gradient(#444_1px,transparent_1px)] [background-size:6px_6px] border border-zinc-700 flex items-center justify-center p-1 overflow-hidden shrink-0">
+                          <img src={content.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold text-white">Logotipo Ativo</div>
+                          <div className="text-[10px] text-zinc-400">
+                            {extractingColors ? 'Detectando cores...' : 'Exibida no topo e rodapé'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 cursor-pointer flex items-center gap-1">
+                          <Upload className="w-3 h-3" />
+                          Trocar
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                            onChange={handleEditorLogoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={handleEditorAutoSearchLogo}
+                        disabled={searchingLogo}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-200 text-xs font-semibold"
+                      >
+                        {searchingLogo ? <Loader2 className="w-3 h-3 animate-spin text-purple-400" /> : <Search className="w-3 h-3 text-purple-400" />}
+                        Buscar na Web
+                      </button>
+                      <label className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-semibold cursor-pointer">
+                        <Upload className="w-3 h-3" />
+                        Upload Logo
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                          onChange={handleEditorLogoUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Color Adjusters */}
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-800/80">
+                    <div>
+                      <label className="block text-[11px] text-zinc-400 mb-1">Cor Primária (Botões & Destaques)</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={style.primaryColor}
+                          onChange={(e) =>
+                            setStyle({
+                              ...style,
+                              primaryColor: e.target.value,
+                              logoPalette: {
+                                primary: e.target.value,
+                                accent: style.accentColor,
+                              },
+                            })
+                          }
+                          className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
+                        />
+                        <span className="text-xs font-mono text-zinc-300 uppercase">{style.primaryColor}</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-zinc-400 mb-1">Cor Secundária / Acento</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={style.accentColor}
+                          onChange={(e) =>
+                            setStyle({
+                              ...style,
+                              accentColor: e.target.value,
+                              logoPalette: {
+                                primary: style.primaryColor,
+                                accent: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent"
+                        />
+                        <span className="text-xs font-mono text-zinc-300 uppercase">{style.accentColor}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Hero Section Editing */}

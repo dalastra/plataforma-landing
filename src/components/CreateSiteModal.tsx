@@ -19,8 +19,11 @@ import {
   LayoutTemplate,
   Upload,
   Trash2,
+  Palette,
+  Search,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
+import { extractColorsFromImageSrc, ExtractedBrandColors } from '@/lib/colorExtractor';
 
 interface CreateSiteModalProps {
   isOpen: boolean;
@@ -150,6 +153,18 @@ export default function CreateSiteModal({
   const [refImage, setRefImage] = useState<string>('');
   const [refImageName, setRefImageName] = useState<string>('');
 
+  // Logo & Brand Identity States
+  const [logoUrl, setLogoUrl] = useState<string>('');
+  const [logoSource, setLogoSource] = useState<'auto' | 'upload' | 'url' | null>(null);
+  const [searchingLogo, setSearchingLogo] = useState(false);
+  const [extractingColors, setExtractingColors] = useState(false);
+  const [logoColors, setLogoColors] = useState<ExtractedBrandColors | null>(null);
+  const [applyLogoColors, setApplyLogoColors] = useState(true);
+  const [customPrimaryColor, setCustomPrimaryColor] = useState<string>('');
+  const [customAccentColor, setCustomAccentColor] = useState<string>('');
+  const [showLogoUrlInput, setShowLogoUrlInput] = useState(false);
+  const [logoUrlInputValue, setLogoUrlInputValue] = useState('');
+
   useEffect(() => {
     if (isOpen) {
       setName(initialData.name || '');
@@ -190,6 +205,78 @@ export default function CreateSiteModal({
     reader.readAsDataURL(file);
   }
 
+  async function handleProcessLogo(url: string, source: 'auto' | 'upload' | 'url') {
+    setLogoUrl(url);
+    setLogoSource(source);
+    setExtractingColors(true);
+    try {
+      const colors = await extractColorsFromImageSrc(url);
+      setLogoColors(colors);
+      setCustomPrimaryColor(colors.primary);
+      setCustomAccentColor(colors.accent);
+      toastSuccess('Logotipo e paleta de cores carregados!');
+    } catch (err) {
+      console.warn('Erro ao extrair cores da logo:', err);
+    } finally {
+      setExtractingColors(false);
+    }
+  }
+
+  async function handleAutoSearchLogo() {
+    if (!name.trim()) {
+      toastError('Informe o nome do estabelecimento antes de buscar o logo.');
+      return;
+    }
+    try {
+      setSearchingLogo(true);
+      const res = await fetch(
+        `/api/logo/search?name=${encodeURIComponent(name.trim())}&city=${encodeURIComponent(initialData.city || '')}`
+      );
+      const data = await res.json();
+      if (data.success && data.logoUrl) {
+        toastSuccess('Logotipo oficial encontrado!');
+        await handleProcessLogo(data.logoUrl, 'auto');
+      } else {
+        toastError(data.message || 'Logotipo não encontrado na busca web. Você pode fazer o upload da imagem.');
+      }
+    } catch (err: any) {
+      toastError('Erro ao buscar logotipo. Tente fazer o upload do arquivo.');
+    } finally {
+      setSearchingLogo(false);
+    }
+  }
+
+  function handleLogoFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toastError('O logotipo deve ter no máximo 5MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      handleProcessLogo(dataUrl, 'upload');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleManualLogoSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!logoUrlInputValue.trim()) return;
+    handleProcessLogo(logoUrlInputValue.trim(), 'url');
+    setShowLogoUrlInput(false);
+  }
+
+  function handleRemoveLogo() {
+    setLogoUrl('');
+    setLogoSource(null);
+    setLogoColors(null);
+    setCustomPrimaryColor('');
+    setCustomAccentColor('');
+    toastSuccess('Logotipo removido.');
+  }
+
   if (!isOpen) return null;
 
   const currentCategoryObj = CATEGORY_OPTIONS.find((c) => c.key === categoryKey) || CATEGORY_OPTIONS[0];
@@ -206,6 +293,20 @@ export default function CreateSiteModal({
       setLoadingStep('Preparando estrutura e referências...');
 
       const selectedStyle = STYLE_PRESETS[selectedStyleId] || Object.values(STYLE_PRESETS)[0];
+
+      let effectiveStyle = selectedStyle;
+      if (applyLogoColors && customPrimaryColor) {
+        effectiveStyle = {
+          ...selectedStyle,
+          primaryColor: customPrimaryColor,
+          accentColor: customAccentColor || selectedStyle.accentColor,
+          isLogoCustomized: true,
+          logoPalette: {
+            primary: customPrimaryColor,
+            accent: customAccentColor || selectedStyle.accentColor,
+          },
+        };
+      }
 
       // Format custom services list
       const parsedServices = services
@@ -252,6 +353,7 @@ export default function CreateSiteModal({
         customSlogan: slogan.trim() || undefined,
         customServices: parsedServices.length > 0 ? parsedServices : undefined,
         customDifferentials: parsedDiffs.length > 0 ? parsedDiffs : undefined,
+        logoUrl: logoUrl.trim() || undefined,
       };
 
       const referencePayload: SiteReferenceInput = {
@@ -267,7 +369,7 @@ export default function CreateSiteModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           business: businessPayload,
-          style: selectedStyle,
+          style: effectiveStyle,
           reference: referencePayload,
         }),
       });
@@ -443,6 +545,197 @@ export default function CreateSiteModal({
             />
           </div>
 
+          {/* Logotipo & Identidade Visual */}
+          <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-b from-purple-950/20 to-zinc-900/60 border border-purple-500/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                  <Palette className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                    Logotipo & Cores da Marca
+                    <span className="text-[10px] font-normal text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-500/30">
+                      Novo
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-zinc-400">
+                    O sistema busca a logo na web ou você pode enviar a imagem para pintar o site.
+                  </p>
+                </div>
+              </div>
+              {logoUrl && (
+                <button
+                  type="button"
+                  onClick={handleRemoveLogo}
+                  className="text-[11px] text-rose-400 hover:text-rose-300 flex items-center gap-1 transition-colors"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Remover
+                </button>
+              )}
+            </div>
+
+            {/* Actions: Auto-search, File upload, or Direct URL */}
+            {!logoUrl ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAutoSearchLogo}
+                    disabled={searchingLogo || !name.trim()}
+                    className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-200 text-xs font-semibold transition-all disabled:opacity-50"
+                  >
+                    {searchingLogo ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                        <span>Buscando na Web...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Buscar Logo Automaticamente</span>
+                      </>
+                    )}
+                  </button>
+
+                  <label className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-semibold transition-all cursor-pointer">
+                    <Upload className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Fazer Upload (PNG, JPG, SVG)</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                      onChange={handleLogoFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* Option to paste URL */}
+                {!showLogoUrlInput ? (
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowLogoUrlInput(true)}
+                      className="text-[11px] text-zinc-400 hover:text-zinc-300 underline"
+                    >
+                      Ou cole o link direto da imagem
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={logoUrlInputValue}
+                      onChange={(e) => setLogoUrlInputValue(e.target.value)}
+                      placeholder="https://exemplo.com/logo.png"
+                      className="flex-1 px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleManualLogoSubmit}
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-lg"
+                    >
+                      Carregar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowLogoUrlInput(false)}
+                      className="px-2 py-1.5 text-zinc-400 hover:text-white text-xs"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Logo Loaded Preview & Extracted Palette */
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-zinc-900/90 border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 h-14 rounded-lg bg-[radial-gradient(#444_1px,transparent_1px)] [background-size:8px_8px] border border-zinc-700/80 flex items-center justify-center p-1.5 shrink-0 overflow-hidden">
+                      <img
+                        src={logoUrl}
+                        alt="Preview Logotipo"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                        Logotipo Ativo
+                        {logoSource === 'auto' && (
+                          <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-normal">
+                            Auto
+                          </span>
+                        )}
+                        {logoSource === 'upload' && (
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-normal">
+                            Arquivo
+                          </span>
+                        )}
+                        {logoSource === 'url' && (
+                          <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded font-normal">
+                            Link
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-zinc-400">
+                        {extractingColors ? 'Detectando cores...' : 'Cores da marca extraídas'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Extracted Colors Pickers */}
+                  <div className="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-zinc-800 pt-2 sm:pt-0 sm:pl-3">
+                    <div>
+                      <div className="text-[10px] text-zinc-400 mb-1 font-medium">Primária</div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="color"
+                          value={customPrimaryColor || '#1d4ed8'}
+                          onChange={(e) => setCustomPrimaryColor(e.target.value)}
+                          className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                        />
+                        <span className="text-[11px] font-mono text-zinc-200 uppercase">
+                          {customPrimaryColor || '#1d4ed8'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] text-zinc-400 mb-1 font-medium">Destaque</div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="color"
+                          value={customAccentColor || '#f59e0b'}
+                          onChange={(e) => setCustomAccentColor(e.target.value)}
+                          className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                        />
+                        <span className="text-[11px] font-mono text-zinc-200 uppercase">
+                          {customAccentColor || '#f59e0b'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Toggle Apply Logo Colors */}
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={applyLogoColors}
+                    onChange={(e) => setApplyLogoColors(e.target.checked)}
+                    className="rounded border-zinc-700 bg-zinc-900 text-purple-600 focus:ring-purple-500"
+                  />
+                  <span>
+                    Aplicar cores da logo automaticamente ao site{' '}
+                    <strong className="text-purple-300 font-semibold">(Recomendado)</strong>
+                  </span>
+                </label>
+              </div>
+            )}
+          </div>
+
           {/* Estilo Visual Recomendado */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -468,6 +761,31 @@ export default function CreateSiteModal({
                 </div>
               );
             })()}
+
+            {applyLogoColors && customPrimaryColor && (
+              <div className="p-2.5 rounded-xl bg-purple-950/40 border border-purple-800/60 flex items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2 text-xs text-purple-200">
+                  <Palette className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <span>
+                    Paleta da logo sincronizada:{' '}
+                    <strong style={{ color: customPrimaryColor }}>Primária</strong> e{' '}
+                    <strong style={{ color: customAccentColor || '#f59e0b' }}>Destaque</strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span
+                    className="w-4 h-4 rounded-full border border-white/30 shadow"
+                    style={{ backgroundColor: customPrimaryColor }}
+                  />
+                  {customAccentColor && (
+                    <span
+                      className="w-4 h-4 rounded-full border border-white/30 shadow"
+                      style={{ backgroundColor: customAccentColor }}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {Object.values(STYLE_PRESETS).map((st: LandingPageStyle) => {

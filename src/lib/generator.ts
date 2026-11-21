@@ -206,6 +206,7 @@ export async function generateLandingPageProject(
     category: business.category,
     style,
     content,
+    logoUrl: business.logoUrl,
     htmlContent,
     reference,
     createdAt: new Date().toISOString(),
@@ -320,6 +321,7 @@ Responda ESTRITAMENTE em formato JSON puro com a seguinte estrutura:
     ...fallback,
     ...parsed,
     businessName: business.name,
+    logoUrl: business.logoUrl,
     hero: {
       ...parsed.hero,
       backgroundImage: heroPhoto,
@@ -745,6 +747,7 @@ export function generateSemanticContent(
   return {
     businessName: business.name,
     tagline: finalTagline,
+    logoUrl: business.logoUrl,
     layoutType,
     cardapioItems,
     pricingPlans,
@@ -853,12 +856,13 @@ export function renderStandaloneHtml(
   const isDark = style.theme === 'dark';
   const bg = style.bgColor;
   const text = style.textColor;
-  const primary = style.primaryColor;
-  const accent = style.accentColor;
+  const primary = style.logoPalette?.primary || style.primaryColor;
+  const accent = style.logoPalette?.accent || style.accentColor;
   const cardBg = isDark ? '#14161f' : '#ffffff';
   const cardBorder = isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0';
   const subtleText = isDark ? '#94a3b8' : '#64748b';
   const layout = content.layoutType || 'modern_business';
+  const effectiveLogo = content.logoUrl || _business?.logoUrl;
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -915,7 +919,8 @@ export function renderStandaloneHtml(
       border-bottom: 1px solid var(--card-border); padding: 16px 0;
     }
     .nav-wrapper { display: flex; align-items: center; justify-content: space-between; }
-    .nav-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+    .nav-logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 12px; }
+    .nav-logo-img { max-height: 44px; max-width: 150px; width: auto; height: auto; object-fit: contain; border-radius: 6px; }
     .nav-links { display: flex; gap: 26px; align-items: center; }
     .nav-links a { font-size: 14px; font-weight: 500; color: var(--subtle); transition: color 0.2s; }
     .nav-links a:hover { color: var(--text); }
@@ -1107,8 +1112,12 @@ export function renderStandaloneHtml(
 
   <!-- Sticky Mobile Bottom Bar -->
   <div class="sticky-mobile-bar">
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <span class="pulse-indicator"></span>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      ${
+        effectiveLogo
+          ? `<img src="${effectiveLogo}" alt="${content.businessName}" style="width: 32px; height: 32px; border-radius: 6px; object-fit: contain; background: ${isDark ? 'rgba(255,255,255,0.08)' : '#f1f5f9'}; padding: 2px; border: 1px solid var(--card-border);">`
+          : '<span class="pulse-indicator"></span>'
+      }
       <div>
         <div style="font-size: 11px; font-weight: 700; color: #10b981; text-transform: uppercase;">Aberto Agora</div>
         <div style="font-size: 13px; font-weight: 700; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${content.businessName}</div>
@@ -1128,6 +1137,7 @@ export function renderStandaloneHtml(
   <header class="navbar">
     <div class="container nav-wrapper">
       <div class="nav-logo brand-font">
+        ${effectiveLogo ? `<img src="${effectiveLogo}" alt="${content.businessName}" class="nav-logo-img">` : ''}
         <span>${content.businessName}</span>
       </div>
       <nav class="nav-links">
@@ -1598,6 +1608,11 @@ export function renderStandaloneHtml(
   <!-- Footer -->
   <footer>
     <div class="container">
+      ${
+        effectiveLogo
+          ? `<div style="margin-bottom: 16px;"><img src="${effectiveLogo}" alt="${content.businessName}" style="max-height: 42px; max-width: 160px; object-fit: contain;"></div>`
+          : ''
+      }
       <div style="font-weight: 800; font-size: 16px; margin-bottom: 8px;">${content.businessName}</div>
       <p style="margin-bottom: 12px; color: var(--subtle);">${content.location.address}</p>
       <p>© ${new Date().getFullYear()} ${content.businessName}. Todos os direitos reservados. Demonstração comercial desenvolvida com inteligência artificial.</p>

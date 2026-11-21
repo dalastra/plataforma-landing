@@ -47,6 +47,7 @@ export interface Business {
   customServices?: string[];
   customAboutStory?: string;
   customDifferentials?: string[];
+  logoUrl?: string;
 }
 
 export type StylePresetId =
@@ -73,6 +74,13 @@ export interface LandingPageStyle {
   buttonRadius: 'rounded-none' | 'rounded-md' | 'rounded-xl' | 'rounded-full';
   theme: 'dark' | 'light';
   minimalismLevel: number; // 1 to 5
+  isLogoCustomized?: boolean;
+  logoPalette?: {
+    primary: string;
+    accent: string;
+    secondary?: string;
+    isLightLogo?: boolean;
+  };
 }
 
 export interface SectionHero {
@@ -208,6 +216,7 @@ export interface LandingPageContent {
   location: SectionLocation;
   whatsappNumber: string;
   instagramHandle?: string;
+  logoUrl?: string;
   // Specialized segment modules for high conversion & non-generic layouts
   cardapioItems?: CardapioItem[];
   pricingPlans?: PricingPlan[];
@@ -226,6 +235,7 @@ export interface LandingPageProject {
   category: string;
   style: LandingPageStyle;
   content: LandingPageContent;
+  logoUrl?: string;
   htmlContent?: string;
   reference?: SiteReferenceInput;
   createdAt: string;
