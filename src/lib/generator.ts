@@ -10,6 +10,9 @@ import {
   TeamMember,
   PropertyItem,
   ServiceTableItem,
+  DesignTokens,
+  HeroLayoutType,
+  CardStyleType,
 } from '@/types';
 import { STYLE_PRESETS } from './constants';
 
@@ -151,6 +154,85 @@ async function inspectReferenceUrl(
   }
 }
 
+export function isHexDark(hexColor: string): boolean {
+  try {
+    const clean = hexColor.replace('#', '').trim();
+    if (clean.length !== 6 && clean.length !== 3) return true;
+    const r = parseInt(clean.length === 3 ? clean[0] + clean[0] : clean.substring(0, 2), 16);
+    const g = parseInt(clean.length === 3 ? clean[1] + clean[1] : clean.substring(2, 4), 16);
+    const b = parseInt(clean.length === 3 ? clean[2] + clean[2] : clean.substring(4, 6), 16);
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luma < 135;
+  } catch {
+    return true;
+  }
+}
+
+export function applyDesignTokensToStyle(
+  baseStyle: LandingPageStyle,
+  tokens: DesignTokens,
+  keepLogoPalette?: boolean
+): LandingPageStyle {
+  const isDark = tokens.theme === 'dark' || (tokens.bgColor ? isHexDark(tokens.bgColor) : baseStyle.theme === 'dark');
+
+  const validRadius = (['rounded-none', 'rounded-md', 'rounded-xl', 'rounded-full'] as const).includes(
+    tokens.buttonRadius as any
+  )
+    ? (tokens.buttonRadius as 'rounded-none' | 'rounded-md' | 'rounded-xl' | 'rounded-full')
+    : baseStyle.buttonRadius;
+
+  const validHeroLayout: HeroLayoutType = (
+    ['split-right', 'centered', 'card-overlay', 'editorial-clean'] as const
+  ).includes(tokens.heroLayout as any)
+    ? (tokens.heroLayout as HeroLayoutType)
+    : 'split-right';
+
+  const validCardStyle: CardStyleType = (['glass', 'solid', 'bordered', 'minimal'] as const).includes(
+    tokens.cardStyle as any
+  )
+    ? (tokens.cardStyle as CardStyleType)
+    : isDark
+    ? 'glass'
+    : 'solid';
+
+  const primaryColor =
+    keepLogoPalette && baseStyle.logoPalette?.primary
+      ? baseStyle.logoPalette.primary
+      : tokens.primaryColor || baseStyle.primaryColor;
+
+  const accentColor =
+    keepLogoPalette && baseStyle.logoPalette?.accent
+      ? baseStyle.logoPalette.accent
+      : tokens.accentColor || baseStyle.accentColor;
+
+  return {
+    ...baseStyle,
+    theme: isDark ? 'dark' : 'light',
+    bgColor: tokens.bgColor || (isDark ? '#0b0f19' : '#ffffff'),
+    textColor: tokens.textColor || (isDark ? '#f8fafc' : '#0f172a'),
+    primaryColor,
+    secondaryColor: tokens.secondaryColor || baseStyle.secondaryColor,
+    accentColor,
+    cardBg: tokens.cardBg || (isDark ? '#131b2e' : '#ffffff'),
+    fontHeading: tokens.fontHeading || baseStyle.fontHeading,
+    fontBody: tokens.fontBody || baseStyle.fontBody,
+    buttonRadius: validRadius,
+    heroLayout: validHeroLayout,
+    cardStyle: validCardStyle,
+  };
+}
+
+export function applyFallbackTokens(
+  baseStyle: LandingPageStyle,
+  _reference?: SiteReferenceInput
+): LandingPageStyle {
+  return {
+    ...baseStyle,
+    heroLayout: baseStyle.heroLayout || 'split-right',
+    cardStyle: baseStyle.cardStyle || (baseStyle.theme === 'dark' ? 'glass' : 'solid'),
+  };
+}
+
 export async function generateLandingPageProject(
   business: Business,
   styleOverride?: LandingPageStyle,
@@ -177,7 +259,9 @@ export async function generateLandingPageProject(
       ? 'corporate-elegant'
       : 'modern-minimalist');
 
-  const style = styleOverride || STYLE_PRESETS[defaultStyleId] || STYLE_PRESETS['modern-minimalist'];
+  let style: LandingPageStyle = {
+    ...(styleOverride || STYLE_PRESETS[defaultStyleId] || STYLE_PRESETS['modern-minimalist']),
+  };
 
   let inspectedRef: { title?: string; description?: string; headings?: string[] } | null = null;
   if (reference?.mode === 'url' && reference.url) {
@@ -187,13 +271,21 @@ export async function generateLandingPageProject(
   let content: LandingPageContent;
   if (geminiApiKey && geminiApiKey.trim().length > 10) {
     try {
-      content = await generateWithGemini(business, style, geminiApiKey);
+      const geminiResult = await generateWithGemini(business, style, geminiApiKey, reference, inspectedRef);
+      content = geminiResult.content;
+      if (geminiResult.designTokens) {
+        style = applyDesignTokensToStyle(style, geminiResult.designTokens, Boolean(style.isLogoCustomized));
+      } else {
+        style = applyFallbackTokens(style, reference);
+      }
     } catch (err) {
       console.warn('Gemini generation failed, falling back to heuristic engine:', err);
       content = generateSemanticContent(business, style, reference, inspectedRef);
+      style = applyFallbackTokens(style, reference);
     }
   } else {
     content = generateSemanticContent(business, style, reference, inspectedRef);
+    style = applyFallbackTokens(style, reference);
   }
 
   const projectId = `proj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -218,23 +310,99 @@ export async function generateLandingPageProject(
 async function generateWithGemini(
   business: Business,
   style: LandingPageStyle,
-  apiKey: string
-): Promise<LandingPageContent> {
+  apiKey: string,
+  reference?: SiteReferenceInput,
+  inspectedRef?: { title?: string; description?: string; headings?: string[] } | null
+): Promise<{ content: LandingPageContent; designTokens?: DesignTokens }> {
+  // Extract reference image inline data if provided
+  let inlineImageData: { mimeType: string; data: string } | null = null;
+  if (reference?.mode === 'image' && reference.image) {
+    const imgStr = reference.image.trim();
+    if (imgStr.startsWith('data:')) {
+      const match = imgStr.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        inlineImageData = {
+          mimeType: match[1],
+          data: match[2],
+        };
+      }
+    } else if (imgStr.startsWith('http')) {
+      try {
+        const imgRes = await fetch(imgStr, { signal: AbortSignal.timeout(6000) });
+        if (imgRes.ok) {
+          const mime = (imgRes.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+          const buffer = await imgRes.arrayBuffer();
+          inlineImageData = {
+            mimeType: mime,
+            data: Buffer.from(buffer).toString('base64'),
+          };
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar imagem de referência externa:', e);
+      }
+    }
+  }
+
+  const hasRefImage = Boolean(inlineImageData);
+  const hasRefUrl = Boolean(inspectedRef);
+
   const prompt = `
-Você é um Copywriter e Diretor de Arte sênior especialista em Landing Pages de Altíssima Conversão para negócios locais no Brasil.
-Crie o conteúdo completo para uma landing page de alto padrão para:
+Você é um Diretor de Arte e Copywriter sênior especialista em Landing Pages de altíssima conversão e design moderno (nível Awwwards / agências digitais de elite).
+Crie o conteúdo completo, persuasivo e os tokens visuais para o estabelecimento:
 
 Nome: ${business.name}
 Categoria: ${business.category} (Chave: ${business.categoryKey})
 Endereço: ${business.address}
 Telefone/WhatsApp: ${business.phone || business.whatsapp || 'WhatsApp Comercial'}
-Serviços: ${business.services.join(', ')}
+Serviços oferecidos: ${business.services.join(', ')}
 Avaliação: ${business.rating ? `${business.rating} estrelas (${business.reviewCount} avaliações)` : 'Excelente reputação'}
 
-Responda ESTRITAMENTE em formato JSON puro com a seguinte estrutura:
+${
+  hasRefUrl
+    ? `DADOS EXTRAÍDOS DO SITE DE REFERÊNCIA:
+- Título da referência: ${inspectedRef?.title || ''}
+- Descrição da referência: ${inspectedRef?.description || ''}
+- Tópicos/Seções da referência: ${inspectedRef?.headings?.join(' | ') || ''}
+Inspire-se no tom, autoridade e proposta de valor acima.`
+    : ''
+}
+
+${
+  hasRefImage
+    ? `ANÁLISE VISUAL CRÍTICA DA IMAGEM DE REFERÊNCIA ANEXADA:
+O usuário enviou uma imagem/print de um site como referência estética direta.
+Analise detalhadamente a imagem de referência anexada e extraia fielmente suas características de design para replicar seu visual:
+1. Paleta de Cores dominante na imagem (em código HEX #xxxxxx válido):
+   - "bgColor": cor de fundo exata da imagem (se for tema escuro/dark, use tom escuro como #0a0c10, #0f172a, #121212; se claro, use #ffffff ou #f8fafc)
+   - "textColor": cor principal de texto que garanta contraste impecável com o fundo (#ffffff ou #0f172a)
+   - "primaryColor": cor de destaque principal/botões de ação vista na imagem
+   - "secondaryColor": cor secundária harmônica da imagem
+   - "accentColor": cor de detalhes, badges e ícones da imagem
+   - "cardBg": cor de fundo dos cards/seções da imagem
+   - "theme": "dark" se o visual for escuro, ou "light" se for claro
+2. Tipografia e Formatos da imagem:
+   - "fontHeading": a fonte do Google Fonts que melhor espelha a tipografia dos títulos da imagem ("Outfit", "Montserrat", "Playfair Display", "Cinzel", "Barlow Condensed", "Plus Jakarta Sans", "Inter", "Sora" ou "Oswald")
+   - "fontBody": fonte para parágrafos ("Inter", "Plus Jakarta Sans", "Montserrat")
+   - "buttonRadius": curvatura dos botões ("rounded-none" para cantos retos, "rounded-md" para sutil, "rounded-xl" para moderno, ou "rounded-full" para pílula)
+   - "heroLayout": layout da primeira dobra observado na imagem:
+       * "split-right": texto à esquerda e foto/mockup em destaque à direita (layout mais moderno)
+       * "centered": elementos centralizados com chamada imponente
+       * "card-overlay": cartão flutuante de agendamento/contato sobreposto
+       * "editorial-clean": minimalista, elegante, focado em alta sofisticação
+   - "cardStyle": acabamento dos cards ("glass" para efeito vidro translúcido, "solid" para fundo sólido, "bordered" para contorno limpo)
+`
+    : `DIRETRIZ DE DESIGN VISUAL ÚNICO E NÃO-GENÉRICO:
+Crie uma identidade visual moderna com forte contraste e personalidade própria para ${business.name} (não use tons desbotados ou genéricos):
+- Defina "designTokens" com tema escuro ou claro coerente com ${business.categoryKey}, cores harmônicas marcantes ("primaryColor", "secondaryColor", "accentColor", "bgColor", "textColor", "cardBg"), fontes que transmitam autoridade ("fontHeading", "fontBody"), raio dos botões ("buttonRadius"), "heroLayout" ("split-right", "centered", "card-overlay" ou "editorial-clean") e "cardStyle" ("glass", "solid", "bordered").`
+}
+
+IMPORTANTE SOBRE O COPYWRITING:
+Evite clichês genéricos como "Excelência em serviços". Escreva textos altamente persuasivos, específicos para o nicho de ${business.name}, mencionando os serviços reais (${business.services.slice(0, 3).join(', ')}), o endereço ou região, com foco em facilitar o clique para o WhatsApp.
+
+Responda ESTRITAMENTE em formato JSON com a seguinte estrutura:
 {
   "businessName": "${business.name}",
-  "tagline": "Slogan de alto impacto",
+  "tagline": "Slogan marcante de alto impacto",
   "layoutType": "${
     business.categoryKey === 'pizzaria' || business.categoryKey === 'restaurante'
       ? 'gastronomy'
@@ -252,39 +420,67 @@ Responda ESTRITAMENTE em formato JSON puro com a seguinte estrutura:
       ? 'real_estate'
       : 'modern_business'
   }",
+  "designTokens": {
+    "theme": "dark ou light",
+    "bgColor": "#HEX",
+    "textColor": "#HEX",
+    "primaryColor": "#HEX",
+    "secondaryColor": "#HEX",
+    "accentColor": "#HEX",
+    "cardBg": "#HEX",
+    "fontHeading": "Nome da Fonte",
+    "fontBody": "Nome da Fonte",
+    "buttonRadius": "rounded-none | rounded-md | rounded-xl | rounded-full",
+    "heroLayout": "split-right | centered | card-overlay | editorial-clean",
+    "cardStyle": "glass | solid | bordered"
+  },
   "hero": {
     "headline": "Título chamativo e persuasivo",
-    "subheadline": "Subtítulo explicando o valor e benefício",
-    "ctaText": "Texto do botão principal (ex: Agendar Horário)",
+    "subheadline": "Subtítulo explicando valor e benefício real",
+    "ctaText": "Texto do botão (ex: Agendar Horário)",
     "ctaWhatsapp": true,
-    "badge": "Destaque curto"
+    "badge": "Selo de destaque curto"
   },
   "about": {
     "title": "Sobre Nós",
-    "story": "História e proposta de valor",
+    "story": "História autêntica destacando autoridade e diferenciais",
     "highlights": ["Destaque 1", "Destaque 2", "Destaque 3"]
   },
   "services": {
     "title": "Nossos Serviços",
-    "subtitle": "Conheça nossas soluções",
+    "subtitle": "Conheça nossas soluções completas",
     "items": [
-      { "id": "s1", "title": "Serviço 1", "description": "Descrição detalhada com benefícios", "price": "R$ ..." }
+      { "id": "s1", "title": "Serviço 1", "description": "Descrição detalhada com benefício claro", "price": "R$ ..." }
     ]
   },
   "differentials": {
-    "title": "Por que nos escolher",
+    "title": "Por Que Nos Escolher",
     "items": [
-      { "title": "Diferencial 1", "description": "Explicação persuasiva" }
+      { "title": "Diferencial 1", "description": "Explicação persuasiva" },
+      { "title": "Diferencial 2", "description": "Explicação persuasiva" },
+      { "title": "Diferencial 3", "description": "Explicação persuasiva" }
     ]
   },
   "testimonials": {
     "title": "Depoimentos Reais",
     "items": [
-      { "author": "Nome do Cliente", "role": "Cliente Frequente", "text": "Depoimento convincente e realista", "rating": 5 }
+      { "author": "Nome do Cliente", "role": "Cliente", "text": "Depoimento convincente e realista", "rating": 5 }
     ]
-  }
+  },
+  "specialBadges": ["Diferencial 1", "Diferencial 2", "Diferencial 3"]
 }
 `;
+
+  const parts: any[] = [];
+  if (inlineImageData) {
+    parts.push({
+      inlineData: {
+        mimeType: inlineImageData.mimeType,
+        data: inlineImageData.data,
+      },
+    });
+  }
+  parts.push({ text: prompt });
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -292,7 +488,7 @@ Responda ESTRITAMENTE em formato JSON puro com a seguinte estrutura:
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts }],
         generationConfig: {
           responseMimeType: 'application/json',
           temperature: 0.7,
@@ -310,23 +506,24 @@ Responda ESTRITAMENTE em formato JSON puro com a seguinte estrutura:
   const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!rawText) throw new Error('No response from Gemini API');
 
-  const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+  const cleanJson = rawText.replace(/```json/gi, '').replace(/```/gi, '').trim();
   const parsed = JSON.parse(cleanJson);
   const { heroPhoto, aboutPhoto, galleryPhotos } = getCuratedPhotosForBusiness(business);
 
-  // Return parsed blended with fallback semantic modules
-  const fallback = generateSemanticContent(business, style);
+  const fallback = generateSemanticContent(business, style, reference, inspectedRef);
 
-  return {
+  const content: LandingPageContent = {
     ...fallback,
     ...parsed,
     businessName: business.name,
     logoUrl: business.logoUrl,
     hero: {
+      ...fallback.hero,
       ...parsed.hero,
       backgroundImage: heroPhoto,
     },
     about: {
+      ...fallback.about,
       ...parsed.about,
       image: aboutPhoto,
     },
@@ -349,6 +546,13 @@ Responda ESTRITAMENTE em formato JSON puro com a seguinte estrutura:
     },
     whatsappNumber: business.whatsapp || business.phone || '',
     instagramHandle: business.instagram,
+    heroLayout: parsed.designTokens?.heroLayout || parsed.heroLayout || 'split-right',
+    designTokens: parsed.designTokens,
+  };
+
+  return {
+    content,
+    designTokens: parsed.designTokens,
   };
 }
 
@@ -858,11 +1062,13 @@ export function renderStandaloneHtml(
   const text = style.textColor;
   const primary = style.logoPalette?.primary || style.primaryColor;
   const accent = style.logoPalette?.accent || style.accentColor;
-  const cardBg = isDark ? '#14161f' : '#ffffff';
-  const cardBorder = isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0';
+  const cardBg = style.cardBg || (isDark ? '#14161f' : '#ffffff');
+  const cardBorder = style.cardBorder || (isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0');
   const subtleText = isDark ? '#94a3b8' : '#64748b';
   const layout = content.layoutType || 'modern_business';
   const effectiveLogo = content.logoUrl || _business?.logoUrl;
+  const heroLayout: HeroLayoutType = style.heroLayout || content.heroLayout || 'split-right';
+  const cardStyle: CardStyleType = style.cardStyle || (isDark ? 'glass' : 'solid');
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -873,7 +1079,7 @@ export function renderStandaloneHtml(
   <meta name="description" content="${content.hero.subheadline}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Outfit:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --primary: ${primary};
@@ -934,7 +1140,7 @@ export function renderStandaloneHtml(
       text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 20px;
     }
     
-    /* Hero */
+    /* Hero Base */
     .hero {
       position: relative; padding: 110px 0 90px; overflow: hidden;
       display: flex; align-items: center; min-height: 82vh;
@@ -946,6 +1152,106 @@ export function renderStandaloneHtml(
     }
     .hero-title { font-size: clamp(34px, 5.2vw, 62px); margin-bottom: 20px; letter-spacing: -1.2px; max-width: 900px; }
     .hero-desc { font-size: clamp(16px, 1.8vw, 20px); color: var(--subtle); max-width: 700px; margin-bottom: 34px; line-height: 1.6; }
+
+    /* Hero Split Layout */
+    .hero-split-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 56px;
+      align-items: center;
+    }
+    .hero-visual-card {
+      position: relative;
+    }
+    .hero-featured-image {
+      width: 100%;
+      height: 480px;
+      object-fit: cover;
+      border-radius: var(--radius);
+      border: 1px solid var(--card-border);
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.35);
+    }
+    .hero-floating-card {
+      position: absolute;
+      bottom: -16px;
+      left: -16px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      backdrop-filter: blur(12px);
+    }
+    .floating-badge-icon {
+      font-size: 24px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'};
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .floating-badge-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .floating-badge-sub { font-size: 12px; color: var(--subtle); }
+    .hero-trust-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 28px;
+    }
+    .trust-pill-mini {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--subtle);
+    }
+
+    /* Hero Card Overlay Layout */
+    .hero-overlay-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 48px;
+      align-items: center;
+    }
+    .hero-action-box {
+      padding: 36px;
+      border-radius: var(--radius);
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      box-shadow: 0 20px 45px rgba(0,0,0,0.25);
+    }
+
+    /* Hero Editorial Layout */
+    .hero-editorial-content {
+      text-align: center;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .hero-editorial-content .hero-title,
+    .hero-editorial-content .hero-desc {
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .hero-editorial-image {
+      margin-top: 48px;
+      width: 100%;
+      max-height: 460px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+    .hero-editorial-image img {
+      width: 100%;
+      height: 460px;
+      object-fit: cover;
+    }
     
     /* Floating Review Badge */
     .review-pill {
@@ -972,12 +1278,34 @@ export function renderStandaloneHtml(
     .section-title { font-size: clamp(28px, 3.8vw, 44px); margin-bottom: 16px; letter-spacing: -0.8px; }
     .section-subtitle { font-size: 16px; color: var(--subtle); line-height: 1.6; }
     
+    /* Card Styles Finishing (Solid, Glass, Bordered) */
+    .service-card, .diff-card, .testi-card, .pricing-card, .cardapio-card-item, .table-card-item {
+      ${
+        cardStyle === 'glass'
+          ? `background: ${isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.8)'} !important;
+             backdrop-filter: blur(14px);
+             -webkit-backdrop-filter: blur(14px);
+             border: 1px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'} !important;
+             box-shadow: 0 8px 30px rgba(0,0,0,0.06);`
+          : cardStyle === 'bordered'
+          ? `background: transparent !important;
+             border: 2px solid var(--card-border) !important;
+             box-shadow: none !important;`
+          : `background: var(--card-bg);
+             border: 1px solid var(--card-border);
+             box-shadow: 0 4px 20px rgba(0,0,0,0.06);`
+      }
+    }
+
     .grid-services { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
     .service-card {
-      background: var(--card-bg); border: 1px solid var(--card-border);
       border-radius: var(--radius); padding: 32px; transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
       display: flex; flex-direction: column; justify-content: space-between;
     }
+    .service-card:hover { transform: translateY(-4px); border-color: var(--primary); box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
+    .service-card h3 { font-size: 20px; margin-bottom: 12px; }
+    .service-card p { color: var(--subtle); font-size: 14px; line-height: 1.6; margin-bottom: 18px; }
+    .service-price { font-size: 20px; font-weight: 800; color: var(--accent); }
     .service-card:hover { transform: translateY(-4px); border-color: var(--primary); box-shadow: 0 12px 30px rgba(0,0,0,0.12); }
     .service-card h3 { font-size: 20px; margin-bottom: 12px; }
     .service-card p { color: var(--subtle); font-size: 14px; line-height: 1.6; margin-bottom: 18px; }
@@ -1086,7 +1414,12 @@ export function renderStandaloneHtml(
       color: var(--subtle); font-size: 13px;
     }
     
-    @media (max-width: 768px) {
+    @media (max-width: 860px) {
+      .hero-split-grid { grid-template-columns: 1fr; gap: 36px; }
+      .hero-featured-image { height: 320px; }
+      .hero-floating-card { position: static; margin-top: 14px; }
+      .hero-overlay-grid { grid-template-columns: 1fr; gap: 32px; }
+      .hero-action-box { padding: 24px; }
       .nav-links { display: none; }
       .about-grid { grid-template-columns: 1fr; }
       .location-box { grid-template-columns: 1fr; padding: 24px; }
@@ -1103,8 +1436,8 @@ export function renderStandaloneHtml(
   ${
     reference && (reference.url || reference.image)
       ? `
-      <div style="background: rgba(37,99,235,0.12); border-bottom: 1px solid rgba(37,99,235,0.25); text-align: center; padding: 8px 16px; font-size: 12px; color: #93c5fd; font-weight: 600;">
-        ✨ Modelo personalizado com inspiração visual em: <strong>${reference.mode === 'url' ? reference.url : 'Referência fornecida'}</strong>
+      <div style="background: ${isDark ? 'rgba(30,41,59,0.7)' : 'rgba(241,245,249,0.95)'}; border-bottom: 1px solid var(--card-border); text-align: center; padding: 8px 16px; font-size: 12px; color: var(--subtle); font-weight: 600;">
+        🎨 Design adaptado e calibrado com base em: <strong style="color: var(--text);">${reference.mode === 'url' ? reference.url : 'Referência visual enviada'}</strong>
       </div>
       `
       : ''
@@ -1158,19 +1491,132 @@ export function renderStandaloneHtml(
   </header>
 
   <!-- Hero Section -->
+  ${(() => {
+    if (heroLayout === 'split-right') {
+      return `
+  <section class="hero hero-split">
+    <div class="hero-bg"></div>
+    <div class="container hero-split-grid">
+      <div class="hero-split-content">
+        <div class="review-pill">
+          <span class="stars">★★★★★</span>
+          <span>${_business?.rating ? `${_business.rating} • Avaliado no Google` : '4.9 / 5.0 • Referência em Qualidade'}</span>
+        </div>
+        <br>
+        <div class="badge">${content.hero.badge || 'Atendimento de Excelência'}</div>
+        <h1 class="hero-title">${content.hero.headline}</h1>
+        <p class="hero-desc">${content.hero.subheadline}</p>
+
+        <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px;">
+          <a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn">
+            ${content.hero.ctaText} →
+          </a>
+          <a href="${layout === 'gastronomy' ? '#cardapio' : layout === 'grooming_beauty' ? '#tabela' : layout === 'fitness' ? '#planos' : '#servicos'}" class="btn btn-outline">
+            ${layout === 'gastronomy' ? 'Ver Cardápio Completo' : layout === 'grooming_beauty' ? 'Ver Tabela de Cortes' : layout === 'fitness' ? 'Conhecer os Planos' : 'Conhecer Serviços'}
+          </a>
+        </div>
+
+        <div class="hero-trust-items">
+          <span class="trust-pill-mini">✓ Atendimento Ágil</span>
+          <span class="trust-pill-mini">✓ Pontualidade & Respeito</span>
+          <span class="trust-pill-mini">✓ Avaliações 5 Estrelas</span>
+        </div>
+      </div>
+
+      <div class="hero-split-visual">
+        <div class="hero-visual-card">
+          <img src="${content.hero.backgroundImage}" alt="${content.businessName}" class="hero-featured-image">
+          <div class="hero-floating-card">
+            <div class="floating-badge-icon">⭐</div>
+            <div>
+              <div class="floating-badge-title">4.9 no Google</div>
+              <div class="floating-badge-sub">Excelência Comprovada</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+      `;
+    }
+
+    if (heroLayout === 'card-overlay') {
+      return `
+  <section class="hero hero-card-overlay">
+    <div class="hero-bg" style="filter: brightness(${isDark ? '0.45' : '0.8'});"></div>
+    <div class="container hero-overlay-grid">
+      <div class="hero-overlay-text">
+        <div class="badge">${content.hero.badge || 'Atendimento de Excelência'}</div>
+        <h1 class="hero-title">${content.hero.headline}</h1>
+        <p class="hero-desc">${content.hero.subheadline}</p>
+        <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px;">
+          <a href="${layout === 'gastronomy' ? '#cardapio' : layout === 'grooming_beauty' ? '#tabela' : layout === 'fitness' ? '#planos' : '#servicos'}" class="btn btn-outline">
+            ${layout === 'gastronomy' ? 'Ver Cardápio Completo' : layout === 'grooming_beauty' ? 'Ver Tabela de Cortes' : layout === 'fitness' ? 'Conhecer os Planos' : 'Conhecer Serviços'}
+          </a>
+        </div>
+      </div>
+      <div class="hero-action-box">
+        <div style="font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">
+          Canal Direto • WhatsApp
+        </div>
+        <h3 style="font-size: 20px; margin-bottom: 10px;">Fale Conosco Agora</h3>
+        <p style="font-size: 13px; color: var(--subtle); margin-bottom: 22px; line-height: 1.5;">
+          Tire dúvidas sobre serviços, consulte horários e fale com a nossa equipe sem burocracia.
+        </p>
+        <a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn" style="width: 100%; justify-content: center; margin-bottom: 14px;">
+          ${content.hero.ctaText} →
+        </a>
+        <div style="display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--subtle);">
+          <span style="color: #10b981; font-size: 14px;">●</span> Atendimento Rápido
+        </div>
+      </div>
+    </div>
+  </section>
+      `;
+    }
+
+    if (heroLayout === 'editorial-clean') {
+      return `
+  <section class="hero hero-editorial">
+    <div class="container hero-editorial-content">
+      <div class="review-pill" style="margin-bottom: 18px;">
+        <span class="stars">★★★★★</span>
+        <span>4.9 / 5.0 • Referência em Qualidade</span>
+      </div>
+      <br>
+      <div class="badge">${content.hero.badge || 'Atendimento Exclusivo'}</div>
+      <h1 class="hero-title">${content.hero.headline}</h1>
+      <p class="hero-desc">${content.hero.subheadline}</p>
+      <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px;">
+        <a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn">
+          ${content.hero.ctaText} →
+        </a>
+        <a href="${layout === 'gastronomy' ? '#cardapio' : layout === 'grooming_beauty' ? '#tabela' : layout === 'fitness' ? '#planos' : '#servicos'}" class="btn btn-outline">
+          ${layout === 'gastronomy' ? 'Ver Cardápio' : layout === 'grooming_beauty' ? 'Ver Preços' : layout === 'fitness' ? 'Conhecer Planos' : 'Conhecer Serviços'}
+        </a>
+      </div>
+      <div class="hero-editorial-image">
+        <img src="${content.hero.backgroundImage}" alt="${content.businessName}">
+      </div>
+    </div>
+  </section>
+      `;
+    }
+
+    return `
   <section class="hero">
     <div class="hero-bg"></div>
-    <div class="container">
+    <div class="container" style="text-align: center; max-width: 900px; margin: 0 auto;">
       <div class="review-pill">
         <span class="stars">★★★★★</span>
         <span>4.9 / 5.0 • Referência em Qualidade</span>
       </div>
       <br>
       <div class="badge">${content.hero.badge || 'Atendimento de Excelência'}</div>
-      <h1 class="hero-title">${content.hero.headline}</h1>
-      <p class="hero-desc">${content.hero.subheadline}</p>
+      <h1 class="hero-title" style="margin-left: auto; margin-right: auto;">${content.hero.headline}</h1>
+      <p class="hero-desc" style="margin-left: auto; margin-right: auto;">${content.hero.subheadline}</p>
 
-      <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px;">
+      <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 10px;">
         <a href="${waLink}" target="_blank" rel="noopener noreferrer" class="btn">
           ${content.hero.ctaText} →
         </a>
@@ -1180,6 +1626,8 @@ export function renderStandaloneHtml(
       </div>
     </div>
   </section>
+    `;
+  })()}
 
   <!-- Trust Strip Badges -->
   ${
