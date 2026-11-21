@@ -68,6 +68,7 @@ export default function DescobertaPage() {
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [hasSearched, setHasSearched] = useState<boolean>(false);
   const [userLocationName, setUserLocationName] = useState<string>('Brasília, DF (Centro do Brasil)');
 
   // Selected Custom Pin (clicked on map)
@@ -104,6 +105,7 @@ export default function DescobertaPage() {
   async function handleSearch(lat?: number, lng?: number, queryOverride?: string) {
     try {
       setLoading(true);
+      setHasSearched(true);
       setShowSearchAreaBtn(false);
       setPendingMoveCenter(null);
       const targetLat = lat !== undefined ? lat : center.lat;
@@ -158,14 +160,6 @@ export default function DescobertaPage() {
     handleSearch(target.lat, target.lng);
     toastInfo('Atualizando estabelecimentos nesta área...');
   }
-
-  // Initial load
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      handleSearch();
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [radiusKm, selectedCategory]);
 
   function handleQueryChange(text: string) {
     setSearchQuery(text);
@@ -523,9 +517,23 @@ export default function DescobertaPage() {
           </span>
         </div>
 
-        {businesses.length === 0 && !loading && (
-          <div className="p-8 text-center bg-[#121215] border border-zinc-800 rounded-xl text-zinc-400">
-            Nenhum estabelecimento listado nesta coordenada. Você pode clicar em qualquer lugar do mapa para escolher o ponto exato e criar o site.
+        {!hasSearched && !loading && (
+          <div className="p-8 text-center bg-[#121215] border border-zinc-800 rounded-xl text-zinc-400 space-y-2">
+            <div className="text-3xl mb-1">🗺️</div>
+            <div className="font-semibold text-zinc-200">Pronto para buscar no mapa</div>
+            <div className="text-xs text-zinc-400 max-w-md mx-auto">
+              Digite um endereço, cidade ou comércio acima e clique no botão <strong className="text-blue-400">"Buscar"</strong> para carregar os estabelecimentos, ou clique diretamente em qualquer ponto do mapa para selecionar o local.
+            </div>
+          </div>
+        )}
+
+        {hasSearched && businesses.length === 0 && !loading && (
+          <div className="p-8 text-center bg-[#121215] border border-zinc-800 rounded-xl text-zinc-400 space-y-2">
+            <div className="text-2xl mb-1">📍</div>
+            <div className="font-semibold text-zinc-200">Nenhum estabelecimento encontrado nesta coordenada</div>
+            <div className="text-xs text-zinc-400 max-w-md mx-auto">
+              Tente aumentar o raio de busca ou clique diretamente em qualquer lugar do mapa para escolher o ponto exato e criar o site.
+            </div>
           </div>
         )}
 
