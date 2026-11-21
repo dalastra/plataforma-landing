@@ -96,6 +96,7 @@ export default function DescobertaPage() {
     lng: number;
     phone?: string;
     whatsapp?: string;
+    photos?: string[];
   } | null>(null);
 
   const [activeProject, setActiveProject] = useState<LandingPageProject | null>(null);
@@ -251,6 +252,7 @@ export default function DescobertaPage() {
       lng: biz.lng,
       phone: biz.phone,
       whatsapp: biz.whatsapp || biz.phone,
+      photos: biz.photos || [],
     });
   }
 
@@ -267,6 +269,7 @@ export default function DescobertaPage() {
       lng: selectedPin.lng,
       phone: selectedPin.phone,
       whatsapp: selectedPin.phone,
+      photos: [],
     });
   }
 

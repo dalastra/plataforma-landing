@@ -115,7 +115,7 @@ export function getCuratedPhotosForBusiness(business: Business) {
 
   const heroPhoto = userPhotos[0] || stock.hero;
   const aboutPhoto = userPhotos[1] || userPhotos[0] || stock.about;
-  const galleryPhotos = userPhotos.length >= 3 ? userPhotos : stock.gallery;
+  const galleryPhotos = userPhotos.length > 0 ? userPhotos : stock.gallery;
 
   return { heroPhoto, aboutPhoto, galleryPhotos };
 }

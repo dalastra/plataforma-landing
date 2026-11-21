@@ -21,6 +21,9 @@ import {
   Trash2,
   Palette,
   Search,
+  Camera,
+  Star,
+  Plus,
 } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 import { extractColorsFromImageSrc, ExtractedBrandColors } from '@/lib/colorExtractor';
@@ -39,6 +42,7 @@ interface CreateSiteModalProps {
     lng: number;
     phone?: string;
     whatsapp?: string;
+    photos?: string[];
   };
   onSuccess: (project: LandingPageProject, business: Business) => void;
 }
@@ -134,7 +138,7 @@ export default function CreateSiteModal({
   initialData,
   onSuccess,
 }: CreateSiteModalProps) {
-  const { success: toastSuccess, error: toastError } = useToast();
+  const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
   const [name, setName] = useState(initialData.name || '');
   const [categoryKey, setCategoryKey] = useState(initialData.categoryKey || 'pizzaria');
   const [address, setAddress] = useState(initialData.address || '');
@@ -165,6 +169,11 @@ export default function CreateSiteModal({
   const [showLogoUrlInput, setShowLogoUrlInput] = useState(false);
   const [logoUrlInputValue, setLogoUrlInputValue] = useState('');
 
+  // Local Photos States
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [showPhotoUrlInput, setShowPhotoUrlInput] = useState(false);
+  const [photoUrlInputValue, setPhotoUrlInputValue] = useState('');
+
   useEffect(() => {
     if (isOpen) {
       setName(initialData.name || '');
@@ -172,6 +181,7 @@ export default function CreateSiteModal({
       setCategoryKey(key);
       setAddress(initialData.address || '');
       setWhatsapp(initialData.whatsapp || initialData.phone || '');
+      setPhotos(initialData.photos && initialData.photos.length > 0 ? [...initialData.photos] : []);
 
       // Automatically recommend and pre-select the optimal style for this category
       const rec = CATEGORY_STYLE_RECOMMENDATIONS[key] || CATEGORY_STYLE_RECOMMENDATIONS['outros'];
@@ -277,6 +287,59 @@ export default function CreateSiteModal({
     toastSuccess('Logotipo removido.');
   }
 
+  function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newPhotos: string[] = [];
+    let processed = 0;
+
+    Array.from(files).forEach((file) => {
+      if (file.size > 8 * 1024 * 1024) {
+        toastError(`A foto "${file.name}" excede 8MB.`);
+        processed++;
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result) {
+          newPhotos.push(reader.result as string);
+        }
+        processed++;
+        if (processed === files.length) {
+          setPhotos((prev) => [...prev, ...newPhotos]);
+          toastSuccess(`${newPhotos.length} foto(s) do local adicionada(s)!`);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleAddPhotoUrl(e: React.FormEvent) {
+    e.preventDefault();
+    if (!photoUrlInputValue.trim()) return;
+    setPhotos((prev) => [...prev, photoUrlInputValue.trim()]);
+    setPhotoUrlInputValue('');
+    setShowPhotoUrlInput(false);
+    toastSuccess('Foto adicionada!');
+  }
+
+  function handleRemovePhoto(index: number) {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
+    toastInfo('Foto removida.');
+  }
+
+  function handleSetAsCover(index: number) {
+    if (index === 0) return;
+    setPhotos((prev) => {
+      const copy = [...prev];
+      const [item] = copy.splice(index, 1);
+      copy.unshift(item);
+      return copy;
+    });
+    toastSuccess('Foto definida como capa principal (Hero)!');
+  }
+
   if (!isOpen) return null;
 
   const currentCategoryObj = CATEGORY_OPTIONS.find((c) => c.key === categoryKey) || CATEGORY_OPTIONS[0];
@@ -334,7 +397,7 @@ export default function CreateSiteModal({
         whatsapp: whatsapp.trim() || undefined,
         websiteStatus: 'none',
         openingHours: hours.trim() ? [hours.trim()] : undefined,
-        photos: [],
+        photos: photos,
         services: parsedServices.length > 0 ? parsedServices : [
           'Atendimento Especializado',
           'Produtos e Serviços Selecionados',
@@ -732,6 +795,147 @@ export default function CreateSiteModal({
                     <strong className="text-purple-300 font-semibold">(Recomendado)</strong>
                   </span>
                 </label>
+              </div>
+            )}
+          </div>
+
+          {/* Fotos do Local / Estabelecimento */}
+          <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-b from-blue-950/20 to-zinc-900/60 border border-blue-500/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                  <Camera className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                    Fotos do Estabelecimento
+                    <span className="text-[10px] font-normal text-blue-300 bg-blue-500/20 px-2 py-0.5 rounded-full border border-blue-500/30">
+                      {photos.length} {photos.length === 1 ? 'foto' : 'fotos'}
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-zinc-400">
+                    Fachada, ambiente interno, produtos ou equipe. A 1ª foto será usada como capa (Hero).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons for Adding Photos */}
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-200 text-xs font-semibold cursor-pointer transition-all">
+                <Upload className="w-3.5 h-3.5 text-blue-400" />
+                <span>Adicionar Fotos (Upload)</span>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+              </label>
+
+              {!showPhotoUrlInput ? (
+                <button
+                  type="button"
+                  onClick={() => setShowPhotoUrlInput(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-800/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-semibold transition-all"
+                >
+                  <Link2 className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Colar Link de Foto</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+                  <input
+                    type="url"
+                    value={photoUrlInputValue}
+                    onChange={(e) => setPhotoUrlInputValue(e.target.value)}
+                    placeholder="https://exemplo.com/foto.jpg"
+                    className="flex-1 px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddPhotoUrl}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg"
+                  >
+                    Adicionar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPhotoUrlInput(false)}
+                    className="px-2 py-1.5 text-zinc-400 hover:text-white text-xs"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Photos Preview Grid */}
+            {photos.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 pt-1">
+                {photos.map((photo, idx) => (
+                  <div
+                    key={`photo-${idx}`}
+                    className={`group relative rounded-xl overflow-hidden border ${
+                      idx === 0
+                        ? 'border-amber-500/80 ring-1 ring-amber-500/60 shadow-lg shadow-amber-500/10'
+                        : 'border-zinc-800 hover:border-zinc-700'
+                    } bg-zinc-900 aspect-video`}
+                  >
+                    <img
+                      src={photo}
+                      alt={`Foto do local #${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+
+                    {/* Role Tag Badge */}
+                    <div className="absolute top-1.5 left-1.5">
+                      {idx === 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-[9px] font-extrabold text-black uppercase tracking-wide flex items-center gap-1 shadow">
+                          <Star className="w-2.5 h-2.5 fill-black" />
+                          Capa (Hero)
+                        </span>
+                      )}
+                      {idx === 1 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-blue-500/90 text-[9px] font-bold text-white shadow">
+                          Sobre Nós
+                        </span>
+                      )}
+                      {idx >= 2 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-black/70 text-[9px] font-semibold text-zinc-300 backdrop-blur-sm">
+                          Galeria #{idx - 1}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Overlay Action Buttons */}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-1.5">
+                      {idx !== 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleSetAsCover(idx)}
+                          title="Definir como foto de capa (Hero)"
+                          className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-bold flex items-center gap-1 shadow"
+                        >
+                          <Star className="w-3 h-3 fill-black" />
+                          Capa
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePhoto(idx)}
+                        title="Remover foto"
+                        className="p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white shadow"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-3 rounded-lg bg-zinc-900/50 border border-dashed border-zinc-800 text-center text-xs text-zinc-500">
+                Nenhuma foto do local adicionada. Se nenhuma for enviada, o sistema usará fotos profissionais curadas da categoria.
               </div>
             )}
           </div>

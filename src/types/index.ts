@@ -60,6 +60,25 @@ export type StylePresetId =
   | 'luxury-exclusive'
   | 'clean-commercial';
 
+export type HeroLayoutType = 'split-right' | 'centered' | 'card-overlay' | 'editorial-clean';
+export type CardStyleType = 'glass' | 'solid' | 'bordered' | 'minimal';
+
+export interface DesignTokens {
+  theme?: 'dark' | 'light';
+  bgColor?: string;
+  textColor?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  cardBg?: string;
+  cardBorder?: string;
+  fontHeading?: string;
+  fontBody?: string;
+  buttonRadius?: 'rounded-none' | 'rounded-md' | 'rounded-xl' | 'rounded-full';
+  heroLayout?: HeroLayoutType;
+  cardStyle?: CardStyleType;
+}
+
 export interface LandingPageStyle {
   id: StylePresetId;
   name: string;
@@ -81,6 +100,10 @@ export interface LandingPageStyle {
     secondary?: string;
     isLightLogo?: boolean;
   };
+  heroLayout?: HeroLayoutType;
+  cardStyle?: CardStyleType;
+  cardBg?: string;
+  cardBorder?: string;
 }
 
 export interface SectionHero {
@@ -226,6 +249,8 @@ export interface LandingPageContent {
   propertyItems?: PropertyItem[];
   serviceTable?: ServiceTableItem[];
   layoutType?: 'gastronomy' | 'health_clinic' | 'grooming_beauty' | 'fitness' | 'automotive' | 'real_estate' | 'pet_care' | 'modern_business';
+  heroLayout?: HeroLayoutType;
+  designTokens?: DesignTokens;
 }
 
 export interface LandingPageProject {
