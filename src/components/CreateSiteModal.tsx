@@ -1,9 +1,25 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Business, LandingPageProject, LandingPageStyle, StylePresetId } from '@/types';
+import { Business, LandingPageProject, LandingPageStyle, StylePresetId, ReferenceMode, SiteReferenceInput } from '@/types';
 import { STYLE_PRESETS } from '@/lib/constants';
-import { Sparkles, MapPin, Phone, Building2, Tag, Clock, FileText, CheckCircle2, X, Loader2 } from 'lucide-react';
+import {
+  Sparkles,
+  MapPin,
+  Phone,
+  Building2,
+  Tag,
+  Clock,
+  FileText,
+  CheckCircle2,
+  X,
+  Loader2,
+  Link2,
+  Image as ImageIcon,
+  LayoutTemplate,
+  Upload,
+  Trash2,
+} from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 
 interface CreateSiteModalProps {
@@ -128,6 +144,12 @@ export default function CreateSiteModal({
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
 
+  // Inspiration reference options (by URL link or by photo/screenshot)
+  const [refMode, setRefMode] = useState<ReferenceMode>('system_template');
+  const [refUrl, setRefUrl] = useState('');
+  const [refImage, setRefImage] = useState<string>('');
+  const [refImageName, setRefImageName] = useState<string>('');
+
   useEffect(() => {
     if (isOpen) {
       setName(initialData.name || '');
@@ -150,6 +172,22 @@ export default function CreateSiteModal({
     if (rec) {
       setSelectedStyleId(rec.recommendedStyleId);
     }
+  }
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      toastError('A imagem deve ter no máximo 4MB.');
+      return;
+    }
+    setRefImageName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setRefImage(reader.result as string);
+      toastSuccess('Foto/print de referência adicionada com sucesso!');
+    };
+    reader.readAsDataURL(file);
   }
 
   if (!isOpen) return null;
@@ -216,6 +254,12 @@ export default function CreateSiteModal({
         customDifferentials: parsedDiffs.length > 0 ? parsedDiffs : undefined,
       };
 
+      const referencePayload: SiteReferenceInput = {
+        mode: refMode,
+        url: refMode === 'url' ? refUrl.trim() || undefined : undefined,
+        image: refMode === 'image' ? refImage || undefined : undefined,
+      };
+
       setLoadingStep('Gerando textos persuasivos e seções com IA...');
 
       const res = await fetch('/api/landing-pages/generate', {
@@ -224,6 +268,7 @@ export default function CreateSiteModal({
         body: JSON.stringify({
           business: businessPayload,
           style: selectedStyle,
+          reference: referencePayload,
         }),
       });
 
@@ -244,34 +289,34 @@ export default function CreateSiteModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+      <div className="relative w-full max-w-2xl bg-[#121215] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden my-2 sm:my-6 max-h-[94vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-zinc-800/80 bg-zinc-900/40">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-zinc-800/80 bg-zinc-900/40 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">Criar Site para este Local</h2>
-              <p className="text-xs text-zinc-400">
-                Personalize as informações abaixo e geraremos uma landing page profissional instantaneamente.
+              <h2 className="text-base sm:text-lg font-bold text-white">Criar Site para este Local</h2>
+              <p className="text-[11px] sm:text-xs text-zinc-400">
+                Personalize as informações ou use um site de inspiração para gerar uma landing page exclusiva.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
             disabled={loading}
-            className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+            className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleGenerate} className="p-6 space-y-5">
+        {/* Form Body with Smooth Mobile Scrolling */}
+        <form onSubmit={handleGenerate} className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
           {/* Nome e Ramo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-blue-400" />
@@ -307,7 +352,7 @@ export default function CreateSiteModal({
           </div>
 
           {/* Endereço e WhatsApp */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-emerald-400" />
@@ -317,7 +362,7 @@ export default function CreateSiteModal({
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Ex: Rua do Retiro, 1200 - Jundiaí, SP"
+                placeholder="Ex: Rua Central, 1200 - Centro"
                 className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-700/80 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -353,7 +398,7 @@ export default function CreateSiteModal({
           </div>
 
           {/* Serviços e Diferenciais */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-semibold text-zinc-300 mb-1.5 flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-indigo-400" />
@@ -363,7 +408,7 @@ export default function CreateSiteModal({
                 rows={3}
                 value={services}
                 onChange={(e) => setServices(e.target.value)}
-                placeholder={"Pizzas salgadas tradicionais e especiais\nPizzas doces artesanais\nBebidas e chopp artesanal\nDelivery rápido"}
+                placeholder={"Opção especial da casa\nAtendimento personalizado\nEntrega rápida e com qualidade"}
                 className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-700/80 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-sans"
               />
             </div>
@@ -377,7 +422,7 @@ export default function CreateSiteModal({
                 rows={3}
                 value={differentials}
                 onChange={(e) => setDifferentials(e.target.value)}
-                placeholder={"Ambiente climatizado e acolhedor\nIngredientes frescos e importados\nEstacionamento no local\nAtendimento rápido no WhatsApp"}
+                placeholder={"Ambiente climatizado e acolhedor\nIngredientes frescos e de qualidade\nAtendimento rápido no WhatsApp"}
                 className="w-full px-3.5 py-2 bg-zinc-900 border border-zinc-700/80 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-sans"
               />
             </div>
@@ -406,7 +451,7 @@ export default function CreateSiteModal({
               </label>
               <span className="text-[11px] text-amber-400 font-medium flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
-                Definido automaticamente pelo ramo
+                Recomendação automática pelo ramo
               </span>
             </div>
 
@@ -474,6 +519,133 @@ export default function CreateSiteModal({
                 );
               })}
             </div>
+          </div>
+
+          {/* Modelo de Inspiração / Referência de Site */}
+          <div className="pt-3 border-t border-zinc-800/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                <LayoutTemplate className="w-3.5 h-3.5 text-blue-400" />
+                Modelo ou Inspiração de Site (Opcional)
+              </label>
+              <span className="text-[11px] text-zinc-400">Seguir link ou foto</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setRefMode('system_template')}
+                className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all ${
+                  refMode === 'system_template'
+                    ? 'border-blue-500 bg-blue-500/15 text-white ring-1 ring-blue-500'
+                    : 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:text-white'
+                }`}
+              >
+                <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold truncate">Modelo do Sistema</div>
+                  <div className="text-[10px] text-zinc-500 truncate">Exclusivo do ramo</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRefMode('url')}
+                className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all ${
+                  refMode === 'url'
+                    ? 'border-blue-500 bg-blue-500/15 text-white ring-1 ring-blue-500'
+                    : 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:text-white'
+                }`}
+              >
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                  <Link2 className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold truncate">Seguir Link (URL)</div>
+                  <div className="text-[10px] text-zinc-500 truncate">Inspirar em site</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRefMode('image')}
+                className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all ${
+                  refMode === 'image'
+                    ? 'border-blue-500 bg-blue-500/15 text-white ring-1 ring-blue-500'
+                    : 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:text-white'
+                }`}
+              >
+                <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                  <ImageIcon className="w-3.5 h-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold truncate">Seguir Foto / Print</div>
+                  <div className="text-[10px] text-zinc-500 truncate">Subir screenshot</div>
+                </div>
+              </button>
+            </div>
+
+            {refMode === 'url' && (
+              <div className="p-3 bg-zinc-900/90 border border-zinc-700/80 rounded-xl space-y-2 animate-in fade-in duration-200">
+                <label className="text-xs font-semibold text-zinc-300 block">
+                  Link (URL) do Site que Você Quer Seguir como Modelo
+                </label>
+                <div className="relative">
+                  <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                  <input
+                    type="url"
+                    value={refUrl}
+                    onChange={(e) => setRefUrl(e.target.value)}
+                    placeholder="Ex: https://site-exemplo.com.br"
+                    className="w-full pl-9 pr-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  A IA analisa as chamadas, seções e proposta do site indicado para estruturar a página do estabelecimento.
+                </p>
+              </div>
+            )}
+
+            {refMode === 'image' && (
+              <div className="p-3 bg-zinc-900/90 border border-zinc-700/80 rounded-xl space-y-2.5 animate-in fade-in duration-200">
+                <label className="text-xs font-semibold text-zinc-300 block">
+                  Print / Foto da Landing Page Modelo
+                </label>
+                {refImage ? (
+                  <div className="flex items-center justify-between p-2.5 bg-zinc-950 border border-zinc-700 rounded-lg">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img src={refImage} alt="Referência" className="w-10 h-10 object-cover rounded border border-zinc-700 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-white truncate">{refImageName || 'Print modelo carregado'}</div>
+                        <div className="text-[10px] text-emerald-400">Pronto para inspirar a IA</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRefImage('');
+                        setRefImageName('');
+                      }}
+                      className="p-1.5 text-zinc-400 hover:text-red-400 rounded-lg transition-colors shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-zinc-700 rounded-xl hover:border-blue-500 cursor-pointer transition-colors bg-zinc-950/60">
+                    <Upload className="w-5 h-5 text-zinc-400 mb-1" />
+                    <span className="text-xs font-semibold text-zinc-300">Clique para enviar o print/screenshot</span>
+                    <span className="text-[10px] text-zinc-500">PNG, JPG ou WEBP até 4MB</span>
+                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                  </label>
+                )}
+                <p className="text-[11px] text-zinc-400">
+                  A IA se inspira no layout visual e diagramação da imagem enviada para montar o site.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Footer Actions */}

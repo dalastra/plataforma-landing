@@ -363,7 +363,7 @@ export default function MapComponent({
       className={`relative isolate z-0 w-full overflow-hidden transition-all duration-200 border border-zinc-800 shadow-xl ${
         isFullscreen
           ? 'fixed inset-0 z-[99999] h-screen w-screen rounded-none bg-black'
-          : 'h-full min-h-[500px] rounded-xl'
+          : 'h-full min-h-[380px] sm:min-h-[480px] lg:min-h-[550px] rounded-xl'
       }`}
     >
       {/* Map Controls (Layer Switcher & Fullscreen Toggle) */}
@@ -416,7 +416,7 @@ export default function MapComponent({
         <span>Clique em qualquer lugar no mapa ou num marcador para escolher o local</span>
       </div>
 
-      <div ref={mapContainerRef} className="w-full h-full min-h-[500px]" />
+      <div ref={mapContainerRef} className="w-full h-full min-h-[380px] sm:min-h-[480px] lg:min-h-[550px]" />
     </div>
   );
 }

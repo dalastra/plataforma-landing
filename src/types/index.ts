@@ -141,6 +141,37 @@ export interface SectionLocation {
   mapEmbedUrl?: string;
 }
 
+export type ReferenceMode = 'system_template' | 'url' | 'image';
+
+export interface SiteReferenceInput {
+  mode: ReferenceMode;
+  url?: string;
+  image?: string;
+  notes?: string;
+}
+
+export interface CardapioItem {
+  id: string;
+  name: string;
+  description: string;
+  price: string;
+  badge?: string;
+  image?: string;
+}
+
+export interface PricingPlan {
+  name: string;
+  price: string;
+  period: string;
+  features: string[];
+  recommended?: boolean;
+}
+
+export interface FaqItem {
+  question: string;
+  answer: string;
+}
+
 export interface LandingPageContent {
   businessName: string;
   tagline: string;
@@ -153,6 +184,12 @@ export interface LandingPageContent {
   location: SectionLocation;
   whatsappNumber: string;
   instagramHandle?: string;
+  // Specialized segment modules for high conversion & non-generic layouts
+  cardapioItems?: CardapioItem[];
+  pricingPlans?: PricingPlan[];
+  faqItems?: FaqItem[];
+  specialBadges?: string[];
+  layoutType?: 'gastronomy' | 'health_clinic' | 'grooming_beauty' | 'fitness' | 'automotive' | 'real_estate' | 'modern_business';
 }
 
 export interface LandingPageProject {
@@ -163,6 +200,7 @@ export interface LandingPageProject {
   style: LandingPageStyle;
   content: LandingPageContent;
   htmlContent?: string;
+  reference?: SiteReferenceInput;
   createdAt: string;
   updatedAt: string;
   status: 'draft' | 'ready' | 'shared';

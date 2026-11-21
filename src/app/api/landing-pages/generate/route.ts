@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generateLandingPageProject } from '@/lib/generator';
 import { getUserSettings, saveUserProject, saveUserLead, getUserLeads } from '@/lib/db';
-import { Business, LandingPageStyle, Lead } from '@/types';
+import { Business, LandingPageStyle, Lead, SiteReferenceInput } from '@/types';
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +16,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { business, style }: { business: Business; style?: LandingPageStyle } = body;
+    const {
+      business,
+      style,
+      reference,
+    }: { business: Business; style?: LandingPageStyle; reference?: SiteReferenceInput } = body;
 
     if (!business || !business.name) {
       return NextResponse.json(
@@ -29,7 +33,8 @@ export async function POST(req: NextRequest) {
     const project = await generateLandingPageProject(
       business,
       style,
-      settings.geminiApiKey
+      settings.geminiApiKey,
+      reference
     );
 
     // Save project in database isolated to user

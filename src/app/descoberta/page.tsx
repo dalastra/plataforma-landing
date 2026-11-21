@@ -51,8 +51,9 @@ const CATEGORY_FILTERS = [
 
 export default function DescobertaPage() {
   const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
-  const [center, setCenter] = useState({ lat: -23.1857, lng: -46.8978 }); // Default to Jundiaí / SP
-  const [searchQuery, setSearchQuery] = useState('Rua do Retiro, Jundiaí');
+  // Default to Center of Brazil (Brasília, DF)
+  const [center, setCenter] = useState({ lat: -15.793889, lng: -47.882778 });
+  const [searchQuery, setSearchQuery] = useState('Brasília, DF');
   const [radiusKm, setRadiusKm] = useState<number>(3);
   const [selectedCategory, setSelectedCategory] = useState<string>('todos');
 
@@ -67,7 +68,7 @@ export default function DescobertaPage() {
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [userLocationName, setUserLocationName] = useState<string>('Rua do Retiro, Jundiaí');
+  const [userLocationName, setUserLocationName] = useState<string>('Brasília, DF (Centro do Brasil)');
 
   // Selected Custom Pin (clicked on map)
   const [selectedPin, setSelectedPin] = useState<{
@@ -338,7 +339,7 @@ export default function DescobertaPage() {
                   handleSearch();
                 }
               }}
-              placeholder="Buscar endereço, rua, bairro, cidade ou comércio..."
+              placeholder="Buscar endereço, cidade ou comércio..."
               className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-blue-500"
             />
 
@@ -365,43 +366,46 @@ export default function DescobertaPage() {
             )}
           </div>
 
-          {/* Current Location Button */}
-          <button
-            onClick={handleUseCurrentLocation}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition-colors shrink-0"
-          >
-            <Crosshair className="w-3.5 h-3.5 text-blue-400" />
-            <span>Usar meu GPS</span>
-          </button>
-
-          {/* Radius Selector */}
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-zinc-400 font-medium">Raio:</span>
-            <select
-              value={radiusKm}
-              onChange={(e) => setRadiusKm(Number(e.target.value))}
-              className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500 font-medium"
+          {/* Action buttons bar (Responsive on mobile and desktop) */}
+          <div className="flex items-center gap-2 w-full lg:w-auto justify-between lg:justify-start">
+            {/* Current Location Button */}
+            <button
+              onClick={handleUseCurrentLocation}
+              className="flex-1 lg:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold transition-colors shrink-0"
             >
-              <option value={1}>1 km</option>
-              <option value={3}>3 km</option>
-              <option value={5}>5 km</option>
-              <option value={10}>10 km</option>
-            </select>
-          </div>
+              <Crosshair className="w-3.5 h-3.5 text-blue-400" />
+              <span>Meu GPS</span>
+            </button>
 
-          {/* Search Trigger Button */}
-          <button
-            onClick={() => handleSearch()}
-            disabled={loading}
-            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-500/20 shrink-0"
-          >
-            {loading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Search className="w-3.5 h-3.5" />
-            )}
-            <span>Buscar no Mapa</span>
-          </button>
+            {/* Radius Selector */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 lg:py-0 bg-zinc-900 lg:bg-transparent rounded-xl border lg:border-0 border-zinc-800 shrink-0">
+              <span className="text-xs text-zinc-400 font-medium">Raio:</span>
+              <select
+                value={radiusKm}
+                onChange={(e) => setRadiusKm(Number(e.target.value))}
+                className="bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-2.5 py-2 lg:py-2.5 focus:outline-none focus:border-blue-500 font-medium"
+              >
+                <option value={1}>1 km</option>
+                <option value={3}>3 km</option>
+                <option value={5}>5 km</option>
+                <option value={10}>10 km</option>
+              </select>
+            </div>
+
+            {/* Search Trigger Button */}
+            <button
+              onClick={() => handleSearch()}
+              disabled={loading}
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-blue-500/20 shrink-0"
+            >
+              {loading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Search className="w-3.5 h-3.5" />
+              )}
+              <span>Buscar</span>
+            </button>
+          </div>
         </div>
 
         {/* Current Active Location Display */}
@@ -468,7 +472,7 @@ export default function DescobertaPage() {
       )}
 
       {/* Interactive Map with Floating Search in Area Button */}
-      <div className="w-full h-[550px] relative">
+      <div className="w-full h-[400px] sm:h-[480px] lg:h-[560px] relative rounded-xl overflow-hidden">
         {showSearchAreaBtn && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] animate-in fade-in slide-in-from-top-2 duration-200">
             <button

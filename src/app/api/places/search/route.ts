@@ -25,14 +25,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Default to São Paulo center if no location could be derived
+    // Default to Center of Brazil (Brasília, DF) if no location could be derived
     if (!lat || !lng) {
-      lat = -23.55052;
-      lng = -46.633308;
+      lat = -15.793889;
+      lng = -47.882778;
       geocodeResult = {
         lat,
         lng,
-        displayName: 'São Paulo, SP, Brasil',
+        displayName: 'Brasília, DF, Brasil (Centro do Brasil)',
       };
     }
 
