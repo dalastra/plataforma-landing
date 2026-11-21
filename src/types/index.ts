@@ -172,6 +172,30 @@ export interface FaqItem {
   answer: string;
 }
 
+export interface TeamMember {
+  name: string;
+  role: string;
+  specialty: string;
+  photo?: string;
+}
+
+export interface PropertyItem {
+  id: string;
+  title: string;
+  price: string;
+  location: string;
+  specs: string[];
+  image: string;
+  badge?: string;
+}
+
+export interface ServiceTableItem {
+  name: string;
+  duration: string;
+  price: string;
+  description?: string;
+}
+
 export interface LandingPageContent {
   businessName: string;
   tagline: string;
@@ -189,7 +213,10 @@ export interface LandingPageContent {
   pricingPlans?: PricingPlan[];
   faqItems?: FaqItem[];
   specialBadges?: string[];
-  layoutType?: 'gastronomy' | 'health_clinic' | 'grooming_beauty' | 'fitness' | 'automotive' | 'real_estate' | 'modern_business';
+  teamMembers?: TeamMember[];
+  propertyItems?: PropertyItem[];
+  serviceTable?: ServiceTableItem[];
+  layoutType?: 'gastronomy' | 'health_clinic' | 'grooming_beauty' | 'fitness' | 'automotive' | 'real_estate' | 'pet_care' | 'modern_business';
 }
 
 export interface LandingPageProject {
